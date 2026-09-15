@@ -2,12 +2,13 @@ import 'package:watch_my_wallet/auth/auth_service.dart';
 
 class Record {
   int? id;
-  int? uid;
+  String? uid;
   String details;
   String description;
   String labelText;
   double amount;
   String type;
+  DateTime date; // Added to track specific transaction date
 
   Record({
     this.id,
@@ -17,27 +18,33 @@ class Record {
     required this.amount,
     required this.labelText,
     required this.type,
+    required this.date,
   });
 
   factory Record.fromMap(Map<String, dynamic> map) {
     return Record(
-      details: map["type"] as String,
-      description: map["description"] as String,
-      amount: map["amount"] as double,
-      labelText: map["labelText"] as String,
-      type: map["type"] as String,
+      id: map["id"],
+      uid: map["uuid"],
+      details: map["details"] ?? '',
+      description: map["description"] ?? '',
+      amount: (map["amount"] as num).toDouble(),
+      labelText: map["label"] ?? '',
+      type: map["type"] ?? '',
+      date: map["date"] != null ? DateTime.parse(map["date"]) : DateTime.now(),
     );
   }
-  final userId = AuthService().getCurrentUserUid();
 
   Map<String, dynamic> toMap() {
+    final userId = AuthService().getCurrentUserUid();
+
     return {
       "description": description,
       "label": labelText,
       "details": details,
       "amount": amount,
       "type": type,
-      "uid": userId,
+      "uuid": userId,
+      "date": date.toIso8601String(),
     };
   }
 }

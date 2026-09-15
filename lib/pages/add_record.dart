@@ -1,6 +1,7 @@
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:watch_my_wallet/record.dart';
 import 'package:watch_my_wallet/record_database.dart';
 
@@ -13,215 +14,341 @@ class AddRecord extends StatefulWidget {
 
 enum RecordType { income, expense }
 
-final List<Map<String, dynamic>> listLabel = [
-  {'label': 'Food', 'icon': Icons.fastfood},
-  {'label': 'Grocery', 'icon': Icons.shopping_cart},
-  {'label': 'Travelling', 'icon': Icons.directions_car},
-  {'label': 'Fuel', 'icon': Icons.local_gas_station},
-];
-
-final valueListenable = ValueNotifier<String?>(null);
-
 class _AddRecordState extends State<AddRecord> {
-  TextEditingController descriptionController = TextEditingController();
-  TextEditingController amountController = TextEditingController();
-  TextEditingController detailController = TextEditingController();
+  final TextEditingController descriptionController = TextEditingController();
+  final TextEditingController amountController = TextEditingController();
+  final TextEditingController detailController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  RecordType? _recordType;
-  String recordValue = "";
+
+  final ValueNotifier<String?> labelValueListenable = ValueNotifier<String?>(
+    null,
+  );
+
+  RecordType _selectedType = RecordType.expense;
+  DateTime _selectedDate = DateTime.now();
+
+  final List<Map<String, dynamic>> expenseLabels = [
+    {'label': 'Food', 'icon': Icons.fastfood_rounded},
+    {'label': 'Grocery', 'icon': Icons.shopping_cart_rounded},
+    {'label': 'Transport', 'icon': Icons.directions_bus_rounded},
+    {'label': 'Fuel', 'icon': Icons.local_gas_station_rounded},
+    {'label': 'Shopping', 'icon': Icons.shopping_bag_rounded},
+    {'label': 'Rent', 'icon': Icons.home_rounded},
+    {'label': 'Bills', 'icon': Icons.receipt_long_rounded},
+    {'label': 'Entertainment', 'icon': Icons.movie_rounded},
+    {'label': 'Medical', 'icon': Icons.medical_services_rounded},
+    {'label': 'Education', 'icon': Icons.school_rounded},
+    {'label': 'Others', 'icon': Icons.more_horiz_rounded},
+  ];
+
+  final List<Map<String, dynamic>> incomeLabels = [
+    {'label': 'Salary', 'icon': Icons.payments_rounded},
+    {'label': 'Business', 'icon': Icons.business_center_rounded},
+    {'label': 'Freelance', 'icon': Icons.laptop_mac_rounded},
+    {'label': 'Investments', 'icon': Icons.trending_up_rounded},
+    {'label': 'Gift', 'icon': Icons.card_giftcard_rounded},
+    {'label': 'Others', 'icon': Icons.more_horiz_rounded},
+  ];
+
   final RecordDatabase _recordDatabase = RecordDatabase();
 
-  void _showDialog() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text("Record added")));
+  @override
+  void dispose() {
+    labelValueListenable.dispose();
+    descriptionController.dispose();
+    amountController.dispose();
+    detailController.dispose();
+    super.dispose();
   }
 
-  void _addRecord() {
+  Future<void> _pickDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Colors.black,
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+      });
+    }
+  }
+
+  void _submitData() {
     if (!_formKey.currentState!.validate()) return;
-    if (_recordType == null) return;
+    if (labelValueListenable.value == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Please select a category")));
+      return;
+    }
 
     final newRecord = Record(
-      type: recordValue.toString(),
+      type: _selectedType == RecordType.income ? "Income" : "Expense",
       details: detailController.text,
       description: descriptionController.text,
       amount: double.parse(amountController.text),
-      labelText: valueListenable.value.toString(),
+      labelText: labelValueListenable.value.toString(),
+      date: _selectedDate,
     );
-    _recordDatabase.createRecord(newRecord);
-    _showDialog();
 
+    _recordDatabase.createRecord(newRecord);
     Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
+    List<Map<String, dynamic>> currentLabels =
+        _selectedType == RecordType.expense ? expenseLabels : incomeLabels;
+
     return Scaffold(
-      appBar: AppBar(title: Text("Add Record"), centerTitle: true),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text(
+          "New Transaction",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.black,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
         child: Form(
           key: _formKey,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              //Radio Button I/E
-              RadioGroup<RecordType>(
-                groupValue: _recordType,
-                onChanged: (RecordType? record) {
-                  setState(() {
-                    _recordType = record;
-                    recordValue = (record == RecordType.income)
-                        ? "Income"
-                        : "Expense";
-                  });
-                },
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    Radio<RecordType>(value: RecordType.income),
-                    Text("Income"),
-
-                    const SizedBox(width: 50),
-                    Radio<RecordType>(value: RecordType.expense),
-                    Text("Expense"),
+              // 1. Segmented Toggle
+              Center(
+                child: SegmentedButton<RecordType>(
+                  segments: const [
+                    ButtonSegment(
+                      value: RecordType.expense,
+                      label: Text("Expense"),
+                      icon: Icon(Icons.remove_circle_outline),
+                    ),
+                    ButtonSegment(
+                      value: RecordType.income,
+                      label: Text("Income"),
+                      icon: Icon(Icons.add_circle_outline),
+                    ),
                   ],
+                  selected: {_selectedType},
+                  onSelectionChanged: (val) => setState(() {
+                    _selectedType = val.first;
+                    // Reset the selected label value when changing type
+                    labelValueListenable.value = null;
+                  }),
+                  style: SegmentedButton.styleFrom(
+                    selectedBackgroundColor: Colors.black,
+                    selectedForegroundColor: Colors.white,
+                  ),
                 ),
               ),
+              const SizedBox(height: 32),
 
-              const SizedBox(height: 20),
-
-              //Description textfield
+              // 2. Amount Input
+              const Text(
+                "Amount",
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               TextFormField(
-                controller: descriptionController,
-                validator: (value) =>
-                    value!.isEmpty ? 'Please enter an description' : null,
-                decoration: InputDecoration(
-                  hintText: "Description",
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 18,
+                controller: amountController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                ],
+                style: const TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.bold,
+                ),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(
+                    Icons.currency_rupee,
+                    color: Colors.black,
+                    size: 32,
                   ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
+                  hintText: "0.00",
+                  border: InputBorder.none,
+                ),
+                validator: (value) => value!.isEmpty ? 'Enter amount' : null,
+              ),
+              const Divider(),
+              const SizedBox(height: 24),
+
+              // 3. Category Dropdown
+              const Text(
+                "Category",
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-
-              const SizedBox(height: 20),
-
-              //label dropdown
+              const SizedBox(height: 8),
               DropdownButtonFormField2<String>(
                 isExpanded: true,
                 decoration: InputDecoration(
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: 18,
-                    horizontal: 22,
-                  ),
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  contentPadding: const EdgeInsets.symmetric(vertical: 4),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    gapPadding: 0,
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
                   ),
                 ),
-                hint: const Text(
-                  'Select Label',
-                  style: TextStyle(fontSize: 14),
-                ),
-
-                items: listLabel
+                hint: const Text('Select Category'),
+                valueListenable: labelValueListenable,
+                items: currentLabels
                     .map(
                       (item) => DropdownItem<String>(
                         value: item['label'],
                         child: Row(
                           children: [
-                            Icon(item['icon'], size: 22),
-                            const SizedBox(width: 10),
+                            Icon(item['icon'], color: Colors.black87),
+                            const SizedBox(width: 12),
                             Text(item['label']),
                           ],
                         ),
                       ),
                     )
                     .toList(),
-                valueListenable: valueListenable,
-                validator: (value) {
-                  if (value == null) {
-                    return 'Select a Label';
-                  }
-                  return null;
-                },
                 onChanged: (value) {
-                  valueListenable.value = value;
+                  labelValueListenable.value = value;
                 },
-                iconStyleData: const IconStyleData(
-                  icon: Icon(Icons.arrow_drop_down, color: Colors.black45),
-                ),
+                validator: (value) => value == null ? 'Select category' : null,
                 dropdownStyleData: DropdownStyleData(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                 ),
-                menuItemStyleData: const MenuItemStyleData(
-                  useDecorationHorizontalPadding: true,
+              ),
+              const SizedBox(height: 24),
+
+              // 4. Date Picker
+              const Text(
+                "Date",
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: _pickDate,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today, color: Colors.black87),
+                      const SizedBox(width: 12),
+                      Text(
+                        DateFormat('MMM dd, yyyy').format(_selectedDate),
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      const Spacer(),
+                      const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
 
-              const SizedBox(height: 20),
-
-              //amount textfirld
+              // 5. Description Field
+              const Text(
+                "Description",
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
               TextFormField(
-                controller: amountController,
-                keyboardType: TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                ],
-                validator: (value) =>
-                    value!.isEmpty ? 'Please enter an amount' : null,
+                controller: descriptionController,
                 decoration: InputDecoration(
-                  prefixIcon: Icon(Icons.currency_rupee),
-                  hintText: "Enter Amount",
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 18,
-                  ),
+                  hintText: "e.g., Grocery store",
+                  filled: true,
+                  fillColor: Colors.grey[100],
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
                   ),
                 ),
+                validator: (value) =>
+                    value!.isEmpty ? 'Enter description' : null,
               ),
+              const SizedBox(height: 24),
 
-              const SizedBox(height: 20),
-
-              //details textfield
+              // 6. Notes Field
+              const Text(
+                "Notes (Optional)",
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
               TextFormField(
                 controller: detailController,
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) =>
-                    value!.isEmpty ? 'Enter some details' : null,
+                maxLines: 2,
                 decoration: InputDecoration(
-                  hintText: "Details",
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 18,
-                  ),
+                  hintText: "Add details...",
+                  filled: true,
+                  fillColor: Colors.grey[100],
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
                   ),
                 ),
               ),
+              const SizedBox(height: 40),
 
-              const SizedBox(height: 20),
-
+              // Save Button
               SizedBox(
                 width: double.infinity,
-                height: 50,
+                height: 56,
                 child: ElevatedButton(
-                  onPressed: () => _addRecord(),
-
+                  onPressed: _submitData,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
                   ),
-                  child: Text(
-                    "Add Record",
-                    style: TextStyle(color: Colors.white),
+                  child: const Text(
+                    "Save Transaction",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
