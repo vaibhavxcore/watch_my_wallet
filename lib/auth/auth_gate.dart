@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:watch_my_wallet/pages/main_layout.dart';
 
-import '../pages/home_page.dart';
 import '../pages/login_page.dart';
 
 class AuthGate extends StatelessWidget {
@@ -19,7 +19,7 @@ class AuthGate extends StatelessWidget {
         }
         final session = snapshot.hasData ? snapshot.data!.session : null;
         if (session != null) {
-          return const HomePage();
+          return const MainLayout();
         }
         return const LoginPage();
       },

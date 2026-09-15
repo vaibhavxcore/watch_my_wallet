@@ -29,4 +29,9 @@ class AuthService {
     final user = session?.user;
     return user?.email;
   }
+
+  String? getCurrentUserUid() {
+    final uid = _supabaseClient.auth.currentUser?.id;
+    return uid;
+  }
 }
