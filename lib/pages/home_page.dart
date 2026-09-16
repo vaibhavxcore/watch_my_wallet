@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:watch_my_wallet/auth/auth_service.dart';
+import 'package:watch_my_wallet/core/utils/category_icons_data.dart';
 import 'package:watch_my_wallet/record.dart';
 import 'package:watch_my_wallet/record_database.dart';
 
@@ -11,303 +14,470 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final recordDB = RecordDatabase();
-
-  IconData getCategoryIcon(String label) {
-    switch (label) {
-      case 'Food':
-        return Icons.fastfood_rounded;
-      case 'Grocery':
-        return Icons.shopping_cart_rounded;
-      case 'Transport':
-        return Icons.directions_bus_rounded;
-      case 'Fuel':
-        return Icons.local_gas_station_rounded;
-      case 'Shopping':
-        return Icons.shopping_bag_rounded;
-      case 'Rent':
-        return Icons.home_rounded;
-      case 'Bills':
-        return Icons.receipt_long_rounded;
-      case 'Entertainment':
-        return Icons.movie_rounded;
-      case 'Medical':
-        return Icons.medical_services_rounded;
-      case 'Education':
-        return Icons.school_rounded;
-      case 'Salary':
-        return Icons.payments_rounded;
-      case 'Business':
-        return Icons.business_center_rounded;
-      case 'Freelance':
-        return Icons.laptop_mac_rounded;
-      case 'Investments':
-        return Icons.trending_up_rounded;
-      case 'Gift':
-        return Icons.card_giftcard_rounded;
-      default:
-        return Icons.more_horiz_rounded;
-    }
-  }
+  final authService = AuthService();
+  final categoryIcon = CategoryIconsData();
 
   @override
   Widget build(BuildContext context) {
+    final userEmail = authService.getCurrentUserEmail() ?? "User";
+    final userName = userEmail.split('@')[0];
+
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: StreamBuilder<List<Record>>(
-        stream: recordDB.stream,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}"));
-          }
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator.adaptive());
-          }
+      backgroundColor: const Color(0xFFF8F9FB),
+      body: StreamBuilder<Map<String, double>>(
+        stream: recordDB.budgetDataStream,
+        builder: (context, budgetSnapshot) {
+          final budgetData =
+              budgetSnapshot.data ?? {'budget': 0.0, 'extra_income': 0.0};
+          final currentBudgetLimit = budgetData['budget']!;
+          final totalSavings = budgetData['extra_income']!;
 
-          final records = snapshot.data!;
-          double totalIncome = 0;
-          double totalExpense = 0;
-          for (var rec in records) {
-            if (rec.type == "Income") {
-              totalIncome += rec.amount;
-            } else {
-              totalExpense += rec.amount;
-            }
-          }
-          double balance = totalIncome - totalExpense;
+          return StreamBuilder<List<Record>>(
+            stream: recordDB.stream,
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(child: Text("Error: ${snapshot.error}"));
+              }
+              if (!snapshot.hasData) {
+                return const Center(
+                  child: CircularProgressIndicator.adaptive(),
+                );
+              }
 
-          return CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              SliverToBoxAdapter(
-                child: Stack(
-                  children: [
-                    Container(
-                      height: 200,
-                      width: double.infinity,
-                      decoration: const BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.only(
-                          bottomLeft: Radius.circular(40),
-                          bottomRight: Radius.circular(40),
-                        ),
-                      ),
-                      padding: const EdgeInsets.fromLTRB(25, 60, 25, 0),
-                      child: const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Welcome back,",
-                            style: TextStyle(
-                              color: Colors.white60,
-                              fontSize: 16,
+              final records = snapshot.data!;
+              // Newest to Oldest sorting
+              records.sort((a, b) => b.date.compareTo(a.date));
+
+              final now = DateTime.now();
+              double monthlyExpenses = 0;
+              double totalIncome = 0;
+
+              for (var rec in records) {
+                if (rec.type == "Expense") {
+                  if (rec.date.month == now.month &&
+                      rec.date.year == now.year) {
+                    monthlyExpenses += rec.amount;
+                  }
+                } else if (rec.type == "Income") {
+                  totalIncome += rec.amount;
+                }
+              }
+
+              double remainingBudget = currentBudgetLimit - monthlyExpenses;
+              double budgetProgress = currentBudgetLimit > 0
+                  ? (monthlyExpenses / currentBudgetLimit).clamp(0.0, 1.0)
+                  : 0.0;
+
+              return CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  // Premium Dark Header
+                  SliverToBoxAdapter(
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          height: 260,
+                          width: double.infinity,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFF1A1A1A), Color(0xFF000000)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.only(
+                              bottomLeft: Radius.circular(40),
+                              bottomRight: Radius.circular(40),
                             ),
                           ),
-                          Text(
-                            "Watch My Wallet",
-                            style: TextStyle(
+                          padding: const EdgeInsets.fromLTRB(25, 70, 25, 0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Good day,",
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.6),
+                                  fontSize: 16,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              Text(
+                                userName.toUpperCase(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // floating budget card
+                        Positioned(
+                          bottom: -140,
+                          left: 20,
+                          right: 20,
+                          child: Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
                               color: Colors.white,
+                              borderRadius: BorderRadius.circular(30),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 25,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              children: [
+                                const Text(
+                                  "REMAINING BUDGET",
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 12,
+                                    letterSpacing: 1.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  "₹${NumberFormat("#,##,###.##").format(remainingBudget)}",
+                                  style: TextStyle(
+                                    fontSize: 34,
+                                    fontWeight: FontWeight.w900,
+                                    color: remainingBudget < 0
+                                        ? Colors.red.shade700
+                                        : Colors.black,
+                                    letterSpacing: -1,
+                                  ),
+                                ),
+
+                                const SizedBox(height: 20),
+
+                                // budget Progress Bar
+                                if (currentBudgetLimit > 0) ...[
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        "Limit: ₹${NumberFormat("#,##,###").format(currentBudgetLimit)}",
+                                        style: TextStyle(
+                                          color: Colors.grey.shade600,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Text(
+                                        "${(budgetProgress * 100).toInt()}%",
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: LinearProgressIndicator(
+                                      value: budgetProgress,
+                                      backgroundColor: Colors.grey.shade100,
+                                      color: budgetProgress > 0.9
+                                          ? Colors.red
+                                          : Colors.black,
+                                      minHeight: 8,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        "Total Savings: ₹${NumberFormat("#,##,###").format(totalSavings)}",
+                                        style: const TextStyle(
+                                          color: Colors.green,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Text(
+                                        remainingBudget >= 0
+                                            ? "₹${NumberFormat("#,##,###").format(remainingBudget)} left"
+                                            : "Over budget",
+                                        style: TextStyle(
+                                          color: remainingBudget >= 0
+                                              ? Colors.grey
+                                              : Colors.red,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+
+                                const SizedBox(height: 20),
+                                Row(
+                                  children: [
+                                    _buildSummaryTile(
+                                      "Month Exp",
+                                      monthlyExpenses,
+                                      Colors.red.shade600,
+                                      Icons.arrow_upward_rounded,
+                                    ),
+                                    Container(
+                                      height: 35,
+                                      width: 1,
+                                      color: Colors.grey.shade100,
+                                      margin: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                      ),
+                                    ),
+                                    _buildSummaryTile(
+                                      "Total Inc",
+                                      totalIncome,
+                                      Colors.green.shade600,
+                                      Icons.arrow_downward_rounded,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 150)),
+
+                  // Recent Activity Section
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(25, 20, 25, 15),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            "Recent Activity",
+                            style: TextStyle(
                               fontSize: 22,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF1A1D1E),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {},
+                            child: Text(
+                              "See All",
+                              style: TextStyle(
+                                color: Colors.blue.shade800,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        top: 130,
-                        left: 20,
-                        right: 20,
-                      ),
-                      child: Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            const Text(
-                              "Total Balance",
+                  ),
+
+                  records.isEmpty
+                      ? const SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: Center(
+                            child: Text(
+                              "No transactions yet.",
                               style: TextStyle(
                                 color: Colors.grey,
-                                fontWeight: FontWeight.w500,
+                                fontSize: 16,
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              "₹${balance.toStringAsFixed(2)}",
-                              style: const TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                _buildMiniSummary(
-                                  "Income",
-                                  totalIncome,
-                                  Colors.green,
-                                ),
-                                _buildMiniSummary(
-                                  "Expense",
-                                  totalExpense,
-                                  Colors.red,
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(25, 30, 25, 15),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        "Recent Transactions",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () {},
-                        child: Text(
-                          "View All",
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              records.isEmpty
-                  ? const SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Center(child: Text("No transactions yet")),
-                    )
-                  : SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate((context, index) {
-                          final rec = records[index];
-                          final isIncome = rec.type == "Income";
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Material(
-                              // Added Material for Ink Splashes
-                              color: Colors.grey[50],
-                              borderRadius: BorderRadius.circular(20),
-                              child: InkWell(
-                                // Added InkWell for splash effect
-                                borderRadius: BorderRadius.circular(20),
-                                onTap: () {},
-                                child: ListTile(
-                                  contentPadding: const EdgeInsets.all(12),
-                                  leading: Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: Icon(
-                                      getCategoryIcon(rec.labelText),
-                                      color: Colors.black,
-                                    ),
-                                  ),
-                                  title: Text(
-                                    rec.description,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  subtitle: Text(
-                                    rec.labelText,
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                  trailing: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        "${isIncome ? '+' : '-'} ₹${rec.amount.toStringAsFixed(2)}",
-                                        style: TextStyle(
-                                          color: isIncome
-                                              ? Colors.green[700]
-                                              : Colors.red[700],
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                        ),
+                          ),
+                        )
+                      : SliverPadding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          sliver: SliverList(
+                            delegate: SliverChildBuilderDelegate((
+                              context,
+                              index,
+                            ) {
+                              final rec = records[index];
+                              final isIncome = rec.type == "Income";
+                              final dateFormatted = DateFormat(
+                                'MMM dd, yyyy',
+                              ).format(rec.date);
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(24),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.02,
                                       ),
-                                      const Text(
-                                        "Today",
-                                        style: TextStyle(
-                                          color: Colors.grey,
-                                          fontSize: 11,
-                                        ),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(24),
+                                    onTap: () {},
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(12),
+                                            decoration: BoxDecoration(
+                                              color: categoryIcon
+                                                  .getCategoryColor(
+                                                    rec.labelText,
+                                                  )
+                                                  .withValues(alpha: 0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(18),
+                                            ),
+                                            child: Icon(
+                                              categoryIcon.getCategoryIcon(
+                                                rec.labelText,
+                                              ),
+                                              color: categoryIcon
+                                                  .getCategoryColor(
+                                                    rec.labelText,
+                                                  ),
+                                              size: 26,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  rec.description,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w800,
+                                                    fontSize: 17,
+                                                    color: Color(0xFF1A1D1E),
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  rec.labelText,
+                                                  style: TextStyle(
+                                                    color: Colors.grey.shade500,
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.end,
+                                            children: [
+                                              Text(
+                                                "${isIncome ? '+' : '-'} ₹${NumberFormat("#,##,###.##").format(rec.amount)}",
+                                                style: TextStyle(
+                                                  color: isIncome
+                                                      ? Colors.green.shade700
+                                                      : Colors.red.shade700,
+                                                  fontWeight: FontWeight.w900,
+                                                  fontSize: 17,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                dateFormatted,
+                                                style: TextStyle(
+                                                  color: Colors.grey.shade400,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
                                       ),
-                                    ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                          );
-                        }, childCount: records.length),
-                      ),
-                    ),
-              const SliverToBoxAdapter(child: SizedBox(height: 100)),
-            ],
+                              );
+                            }, childCount: records.length),
+                          ),
+                        ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 120)),
+                ],
+              );
+            },
           );
         },
       ),
     );
   }
 
-  Widget _buildMiniSummary(String title, double amount, Color color) {
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 15,
-          backgroundColor: color.withOpacity(0.1),
-          child: Icon(
-            title == "Income" ? Icons.arrow_downward : Icons.arrow_upward,
-            size: 16,
-            color: color,
+  Widget _buildSummaryTile(
+    String title,
+    double amount,
+    Color color,
+    IconData icon,
+  ) {
+    return Expanded(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 18, color: color),
           ),
-        ),
-        const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(color: Colors.grey, fontSize: 12),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title.toUpperCase(),
+                  style: TextStyle(
+                    color: Colors.grey.shade400,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1,
+                  ),
+                ),
+                Text(
+                  "₹${NumberFormat.compact().format(amount)}",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                    color: Color(0xFF1A1D1E),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-            Text(
-              "₹${amount.toStringAsFixed(0)}",
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-          ],
-        ),
-      ],
+          ),
+        ],
+      ),
     );
   }
 }

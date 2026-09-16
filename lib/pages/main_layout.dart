@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_nav_bar/google_nav_bar.dart';
 import 'package:line_icons/line_icons.dart';
@@ -16,14 +15,7 @@ class MainLayout extends StatefulWidget {
 }
 
 class _MainLayoutState extends State<MainLayout> {
-  Color appbarColor = Colors.blueGrey;
   int _selectedIndex = 0;
-
-  void onTap(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
 
   static const List<Widget> _pages = <Widget>[
     HomePage(),
@@ -33,31 +25,30 @@ class _MainLayoutState extends State<MainLayout> {
 
   @override
   Widget build(BuildContext context) {
-    if (kDebugMode) {
-      appbarColor = Colors.red;
-    }
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: appbarColor,
-        title: Text('My Wallet'),
-        actions: [
-          IconButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                PageTransition(
-                  type: PageTransitionType.rightToLeft,
-                  childCurrent: widget,
-                  duration: Duration(milliseconds: 500),
-                  childBuilder: (context) => AddRecord(),
-                ),
-              );
-            },
-            icon: Icon(Icons.add),
-          ),
-        ],
-      ),
       body: _pages.elementAt(_selectedIndex),
+
+      // modify: Floating Action Button for adding records
+      floatingActionButton:
+          _selectedIndex ==
+              0 // Only show on Home or all?
+          ? FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  PageTransition(
+                    type: PageTransitionType.bottomToTop,
+                    childCurrent: widget,
+                    duration: const Duration(milliseconds: 400),
+                    childBuilder: (context) => const AddRecord(),
+                  ),
+                );
+              },
+              backgroundColor: Colors.black,
+              child: const Icon(Icons.add, color: Colors.white, size: 30),
+            )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
 
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -78,11 +69,11 @@ class _MainLayoutState extends State<MainLayout> {
               gap: 8,
               activeColor: Colors.black,
               iconSize: 24,
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              duration: Duration(milliseconds: 400),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              duration: const Duration(milliseconds: 400),
               tabBackgroundColor: Colors.grey[100]!,
-              color: Colors.black,
-              tabs: [
+              color: Colors.black54,
+              tabs: const [
                 GButton(icon: LineIcons.home, text: 'Home'),
                 GButton(icon: LineIcons.calendar, text: 'Calendar'),
                 GButton(icon: LineIcons.user, text: 'Profile'),

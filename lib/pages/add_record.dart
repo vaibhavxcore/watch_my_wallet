@@ -2,6 +2,7 @@ import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:watch_my_wallet/core/utils/category_icons_data.dart';
 import 'package:watch_my_wallet/record.dart';
 import 'package:watch_my_wallet/record_database.dart';
 
@@ -26,29 +27,7 @@ class _AddRecordState extends State<AddRecord> {
 
   RecordType _selectedType = RecordType.expense;
   DateTime _selectedDate = DateTime.now();
-
-  final List<Map<String, dynamic>> expenseLabels = [
-    {'label': 'Food', 'icon': Icons.fastfood_rounded},
-    {'label': 'Grocery', 'icon': Icons.shopping_cart_rounded},
-    {'label': 'Transport', 'icon': Icons.directions_bus_rounded},
-    {'label': 'Fuel', 'icon': Icons.local_gas_station_rounded},
-    {'label': 'Shopping', 'icon': Icons.shopping_bag_rounded},
-    {'label': 'Rent', 'icon': Icons.home_rounded},
-    {'label': 'Bills', 'icon': Icons.receipt_long_rounded},
-    {'label': 'Entertainment', 'icon': Icons.movie_rounded},
-    {'label': 'Medical', 'icon': Icons.medical_services_rounded},
-    {'label': 'Education', 'icon': Icons.school_rounded},
-    {'label': 'Others', 'icon': Icons.more_horiz_rounded},
-  ];
-
-  final List<Map<String, dynamic>> incomeLabels = [
-    {'label': 'Salary', 'icon': Icons.payments_rounded},
-    {'label': 'Business', 'icon': Icons.business_center_rounded},
-    {'label': 'Freelance', 'icon': Icons.laptop_mac_rounded},
-    {'label': 'Investments', 'icon': Icons.trending_up_rounded},
-    {'label': 'Gift', 'icon': Icons.card_giftcard_rounded},
-    {'label': 'Others', 'icon': Icons.more_horiz_rounded},
-  ];
+  final categoryIcons = CategoryIconsData();
 
   final RecordDatabase _recordDatabase = RecordDatabase();
 
@@ -87,7 +66,7 @@ class _AddRecordState extends State<AddRecord> {
     }
   }
 
-  void _submitData() {
+  void _submitData() async {
     if (!_formKey.currentState!.validate()) return;
     if (labelValueListenable.value == null) {
       ScaffoldMessenger.of(
@@ -96,23 +75,78 @@ class _AddRecordState extends State<AddRecord> {
       return;
     }
 
+    final amount = double.parse(amountController.text);
     final newRecord = Record(
       type: _selectedType == RecordType.income ? "Income" : "Expense",
       details: detailController.text,
       description: descriptionController.text,
-      amount: double.parse(amountController.text),
+      amount: amount,
       labelText: labelValueListenable.value.toString(),
       date: _selectedDate,
     );
 
-    _recordDatabase.createRecord(newRecord);
-    Navigator.pop(context);
+    if (_selectedType == RecordType.income) {
+      _showIncomeDialog(newRecord, amount);
+    } else {
+      await _recordDatabase.createRecord(newRecord);
+      if (mounted) Navigator.pop(context);
+    }
+  }
+
+  void _showIncomeDialog(Record record, double amount) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text(
+          "Income Strategy",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          "Would you like to add this income to your spending budget or store it as extra income (savings)?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _recordDatabase.createRecord(record);
+              await _recordDatabase.addIncomeToSavings(amount);
+              if (mounted) Navigator.pop(this.context);
+            },
+            child: const Text(
+              "Extra Income",
+              style: TextStyle(color: Colors.grey),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _recordDatabase.createRecord(record);
+              await _recordDatabase.addIncomeToBudget(amount);
+              if (mounted) Navigator.pop(this.context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.black,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text(
+              "Add to Budget",
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     List<Map<String, dynamic>> currentLabels =
-        _selectedType == RecordType.expense ? expenseLabels : incomeLabels;
+        _selectedType == RecordType.expense
+        ? categoryIcons.expenseLabels
+        : categoryIcons.incomeLabels;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -133,7 +167,6 @@ class _AddRecordState extends State<AddRecord> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Segmented Toggle
               Center(
                 child: SegmentedButton<RecordType>(
                   segments: const [
@@ -151,7 +184,6 @@ class _AddRecordState extends State<AddRecord> {
                   selected: {_selectedType},
                   onSelectionChanged: (val) => setState(() {
                     _selectedType = val.first;
-                    // Reset the selected label value when changing type
                     labelValueListenable.value = null;
                   }),
                   style: SegmentedButton.styleFrom(
@@ -161,8 +193,6 @@ class _AddRecordState extends State<AddRecord> {
                 ),
               ),
               const SizedBox(height: 32),
-
-              // 2. Amount Input
               const Text(
                 "Amount",
                 style: TextStyle(
@@ -195,8 +225,6 @@ class _AddRecordState extends State<AddRecord> {
               ),
               const Divider(),
               const SizedBox(height: 24),
-
-              // 3. Category Dropdown
               const Text(
                 "Category",
                 style: TextStyle(
@@ -232,19 +260,10 @@ class _AddRecordState extends State<AddRecord> {
                       ),
                     )
                     .toList(),
-                onChanged: (value) {
-                  labelValueListenable.value = value;
-                },
+                onChanged: (value) => labelValueListenable.value = value,
                 validator: (value) => value == null ? 'Select category' : null,
-                dropdownStyleData: DropdownStyleData(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
               ),
               const SizedBox(height: 24),
-
-              // 4. Date Picker
               const Text(
                 "Date",
                 style: TextStyle(
@@ -256,10 +275,7 @@ class _AddRecordState extends State<AddRecord> {
               InkWell(
                 onTap: _pickDate,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Colors.grey[100],
                     borderRadius: BorderRadius.circular(16),
@@ -279,8 +295,6 @@ class _AddRecordState extends State<AddRecord> {
                 ),
               ),
               const SizedBox(height: 24),
-
-              // 5. Description Field
               const Text(
                 "Description",
                 style: TextStyle(
@@ -303,33 +317,7 @@ class _AddRecordState extends State<AddRecord> {
                 validator: (value) =>
                     value!.isEmpty ? 'Enter description' : null,
               ),
-              const SizedBox(height: 24),
-
-              // 6. Notes Field
-              const Text(
-                "Notes (Optional)",
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: detailController,
-                maxLines: 2,
-                decoration: InputDecoration(
-                  hintText: "Add details...",
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
               const SizedBox(height: 40),
-
-              // Save Button
               SizedBox(
                 width: double.infinity,
                 height: 56,
@@ -340,7 +328,6 @@ class _AddRecordState extends State<AddRecord> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    elevation: 0,
                   ),
                   child: const Text(
                     "Save Transaction",
