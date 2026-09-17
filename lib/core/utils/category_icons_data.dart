@@ -40,24 +40,37 @@ class CategoryIconsData {
 
   Color getCategoryColor(String label) {
     switch (label) {
+      // Income Colors (gree)
       case 'Salary':
       case 'Business':
       case 'Freelance':
       case 'Investments':
       case 'Gift':
-        return Colors.green.shade700;
+        return const Color(0xFF2E7D32);
+
+      // Expense Colors (specific palette)
       case 'Food':
-        return Colors.orange.shade700;
-      case 'Shopping':
-        return Colors.purple.shade700;
-      case 'Rent':
-      case 'Bills':
-        return Colors.red.shade700;
+        return const Color(0xFFEF6C00); // orange
+      case 'Grocery':
+        return const Color(0xFFFFA000); // amber
       case 'Transport':
+        return const Color(0xFF1565C0); // blue
       case 'Fuel':
-        return Colors.blue.shade700;
+        return const Color(0xFF0277BD); // light Blue
+      case 'Shopping':
+        return const Color(0xFF7B1FA2); // purple
+      case 'Rent':
+        return const Color(0xFFC62828); // red
+      case 'Bills':
+        return const Color(0xFFD84315); // deep Orange
+      case 'Entertainment':
+        return const Color(0xFF00838F); // teal
+      case 'Medical':
+        return const Color(0xFFAD1457); // pink
+      case 'Education':
+        return const Color(0xFF283593); // indigo
       default:
-        return Colors.blueGrey.shade800;
+        return const Color(0xFF455A64); // blue Grey
     }
   }
 

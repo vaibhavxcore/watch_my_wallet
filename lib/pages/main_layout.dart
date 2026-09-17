@@ -6,6 +6,7 @@ import 'package:watch_my_wallet/pages/account_page.dart';
 import 'package:watch_my_wallet/pages/add_record.dart';
 import 'package:watch_my_wallet/pages/calendar_page.dart';
 import 'package:watch_my_wallet/pages/home_page.dart';
+import 'package:watch_my_wallet/pages/insights_page.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -17,10 +18,11 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
 
-  static const List<Widget> _pages = <Widget>[
-    HomePage(),
-    CalendarPage(),
-    AccountPage(),
+  static final List<Widget> _pages = <Widget>[
+    const HomePage(),
+    InsightsPage(),
+    const CalendarPage(),
+    const AccountPage(),
   ];
 
   @override
@@ -28,10 +30,7 @@ class _MainLayoutState extends State<MainLayout> {
     return Scaffold(
       body: _pages.elementAt(_selectedIndex),
 
-      // modify: Floating Action Button for adding records
-      floatingActionButton:
-          _selectedIndex ==
-              0 // Only show on Home or all?
+      floatingActionButton: _selectedIndex == 0
           ? FloatingActionButton(
               onPressed: () {
                 Navigator.push(
@@ -69,12 +68,13 @@ class _MainLayoutState extends State<MainLayout> {
               gap: 8,
               activeColor: Colors.black,
               iconSize: 24,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
               duration: const Duration(milliseconds: 400),
               tabBackgroundColor: Colors.grey[100]!,
               color: Colors.black54,
               tabs: const [
                 GButton(icon: LineIcons.home, text: 'Home'),
+                GButton(icon: LineIcons.pieChart, text: 'Insights'),
                 GButton(icon: LineIcons.calendar, text: 'Calendar'),
                 GButton(icon: LineIcons.user, text: 'Profile'),
               ],
