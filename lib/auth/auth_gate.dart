@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
 import 'package:watch_my_wallet/pages/main_layout.dart';
-
+import 'package:watch_my_wallet/providers/auth_provider.dart';
 import '../pages/login_page.dart';
 
 class AuthGate extends StatelessWidget {
@@ -9,20 +9,13 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder(
-      stream: Supabase.instance.client.auth.onAuthStateChange,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        final session = snapshot.hasData ? snapshot.data!.session : null;
-        if (session != null) {
-          return const MainLayout();
-        }
-        return const LoginPage();
-      },
-    );
+    // Consume AuthProvider instead of using StreamBuilder directly
+    final authProvider = context.watch<AuthProvider>();
+
+    if (authProvider.user != null) {
+      return const MainLayout();
+    } else {
+      return const LoginPage();
+    }
   }
 }

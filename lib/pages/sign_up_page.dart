@@ -1,7 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../auth/auth_service.dart';
+import '../providers/auth_provider.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -15,10 +15,6 @@ class _SignUpPageState extends State<SignUpPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _authService = AuthService();
-
-  bool _isLoading = false;
-  String? _error;
   bool _isObscure = true;
 
   @override
@@ -32,38 +28,34 @@ class _SignUpPageState extends State<SignUpPage> {
   Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+    final authProvider = context.read<AuthProvider>();
+    final messenger = ScaffoldMessenger.of(context);
 
-    try {
-      await _authService.signUpWithEmailAndPassword(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
-      await _authService.signOut();
+    await authProvider.signUp(
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
+    );
 
-      if (!mounted) return;
-      final messenger = ScaffoldMessenger.of(context);
-
-      Navigator.of(context).pop();
-
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Account created! Please sign in.')),
-      );
-    } catch (e) {
-      setState(() => _error = 'Something went wrong. Please try again.');
-      if (kDebugMode) {
-        print(e);
+    if (authProvider.error != null) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(authProvider.error!)));
       }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    } else {
+      // Sign out after sign up to force user to log in as per previous logic
+      await authProvider.signOut();
+      if (mounted) {
+        Navigator.of(context).pop();
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Account created! Please sign in.')),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isLoading = context.watch<AuthProvider>().isLoading;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Create Account')),
       body: SafeArea(
@@ -80,12 +72,11 @@ class _SignUpPageState extends State<SignUpPage> {
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   cursorColor: Colors.black,
-
                   decoration: InputDecoration(
-                    hint: Text('Email'),
+                    hintText: 'Email',
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(color: Colors.black),
+                      borderSide: const BorderSide(color: Colors.black),
                     ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
@@ -103,12 +94,10 @@ class _SignUpPageState extends State<SignUpPage> {
                   },
                 ),
                 const SizedBox(height: 16),
-
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _isObscure,
                   cursorColor: Colors.black,
-
                   decoration: InputDecoration(
                     suffixIcon: IconButton(
                       onPressed: () {
@@ -122,11 +111,10 @@ class _SignUpPageState extends State<SignUpPage> {
                             : Icons.visibility_off,
                       ),
                     ),
-
-                    hint: Text('Password'),
+                    hintText: 'Password',
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(color: Colors.black),
+                      borderSide: const BorderSide(color: Colors.black),
                     ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
@@ -148,10 +136,10 @@ class _SignUpPageState extends State<SignUpPage> {
                   controller: _confirmPasswordController,
                   obscureText: true,
                   decoration: InputDecoration(
-                    hint: Text('Confirm Password'),
+                    hintText: 'Confirm Password',
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(color: Colors.black),
+                      borderSide: const BorderSide(color: Colors.black),
                     ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
@@ -165,24 +153,20 @@ class _SignUpPageState extends State<SignUpPage> {
                   },
                 ),
                 const SizedBox(height: 24),
-                if (_error != null) ...[
-                  Text(
-                    _error!,
-                    style: const TextStyle(color: Colors.red),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                ],
                 ElevatedButton(
-                  onPressed: _signUp,
+                  onPressed: isLoading ? null : _signUp,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     backgroundColor: Colors.black,
                   ),
-
-                  child: _isLoading
-                      ? const Center(
-                          child: CircularProgressIndicator(color: Colors.white),
+                  child: isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
                         )
                       : const Text(
                           'Sign Up',
@@ -191,9 +175,9 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: _isLoading
+                  onPressed: isLoading
                       ? null
-                      : () => Navigator.of(context).pop(), // back to Login
+                      : () => Navigator.of(context).pop(),
                   child: const Text(
                     'Already have an account? Sign In',
                     style: TextStyle(color: Colors.black),

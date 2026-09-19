@@ -20,7 +20,7 @@ class _MainLayoutState extends State<MainLayout> {
 
   static final List<Widget> _pages = <Widget>[
     const HomePage(),
-    InsightsPage(),
+    const InsightsPage(),
     const CalendarPage(),
     const AccountPage(),
   ];
@@ -55,7 +55,7 @@ class _MainLayoutState extends State<MainLayout> {
           boxShadow: [
             BoxShadow(
               blurRadius: 20,
-              color: Colors.black.withValues(alpha: .1),
+              color: Colors.black.withValues(alpha: 0.1),
             ),
           ],
         ),

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:watch_my_wallet/auth/auth_service.dart';
-import 'package:watch_my_wallet/record_database.dart';
+import 'package:provider/provider.dart';
+import 'package:watch_my_wallet/providers/auth_provider.dart';
+import 'package:watch_my_wallet/providers/expense_provider.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
@@ -11,8 +12,6 @@ class AccountPage extends StatefulWidget {
 }
 
 class _AccountPageState extends State<AccountPage> {
-  final _authService = AuthService();
-  final _recordDB = RecordDatabase();
   final _budgetController = TextEditingController();
 
   @override
@@ -42,7 +41,7 @@ class _AccountPageState extends State<AccountPage> {
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                _authService.signOut();
+                context.read<AuthProvider>().signOut();
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red.shade400,
@@ -119,7 +118,7 @@ class _AccountPageState extends State<AccountPage> {
             ElevatedButton(
               onPressed: () {
                 final amount = double.tryParse(_budgetController.text) ?? 0.0;
-                _recordDB.updateDefaultBudget(amount);
+                context.read<ExpenseProvider>().updateBudgetGoal(amount);
                 Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(
@@ -142,178 +141,171 @@ class _AccountPageState extends State<AccountPage> {
 
   @override
   Widget build(BuildContext context) {
-    final userEmail = _authService.getCurrentUserEmail() ?? "User";
+    final authProvider = context.watch<AuthProvider>();
+    final expenseProvider = context.watch<ExpenseProvider>();
+
+    final userEmail = authProvider.user?.email ?? "User";
     final userName = userEmail.split('@')[0];
+
+    final defaultBudget = expenseProvider.defaultBudget;
+    final savings = expenseProvider.extraIncome;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FB),
-      body: StreamBuilder<Map<String, double>>(
-        stream: _recordDB.budgetDataStream,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(
+      body: expenseProvider.error != null
+          ? Center(
               child: Text(
-                "Error: ${snapshot.error}",
+                "Error: ${expenseProvider.error}",
                 style: const TextStyle(color: Colors.red),
               ),
-            );
-          }
-
-          final budgetData =
-              snapshot.data ??
-              {'budget': 0.0, 'extra_income': 0.0, 'default_budget': 0.0};
-          final defaultBudget = budgetData['default_budget'] ?? 0.0;
-          final savings = budgetData['extra_income'] ?? 0.0;
-
-          return CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              // Header
-              SliverToBoxAdapter(
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(25, 75, 25, 30),
-                  decoration: const BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(40),
-                      bottomRight: Radius.circular(40),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 35,
-                        backgroundColor: Colors.white.withValues(alpha: 0.1),
-                        child: const Icon(
-                          Icons.person_rounded,
-                          color: Colors.white,
-                          size: 35,
-                        ),
+            )
+          : CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                // Profile Header
+                SliverToBoxAdapter(
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(25, 75, 25, 30),
+                    decoration: const BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(40),
+                        bottomRight: Radius.circular(40),
                       ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              userName.toUpperCase(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1,
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 35,
+                          backgroundColor: Colors.white.withValues(alpha: 0.1),
+                          child: const Icon(
+                            Icons.person_rounded,
+                            color: Colors.white,
+                            size: 35,
+                          ),
+                        ),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                userName.toUpperCase(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1,
+                                ),
                               ),
-                            ),
-                            Text(
-                              userEmail,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.5),
-                                fontSize: 13,
+                              Text(
+                                userEmail,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                  fontSize: 13,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      IconButton(
-                        onPressed: _showLogoutDialog,
-                        icon: const Icon(
-                          Icons.logout_rounded,
-                          color: Colors.white60,
+                        IconButton(
+                          onPressed: _showLogoutDialog,
+                          icon: const Icon(
+                            Icons.logout_rounded,
+                            color: Colors.white60,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
 
-              //Budget & Savings Stats
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 25, 20, 10),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _buildValueCard(
-                          title: "MONTHLY GOAL",
-                          value: defaultBudget,
-                          color: Colors.blue.shade700,
-                          icon: Icons.track_changes_rounded,
-                          onTap: () => _showUpdateBudgetDialog(defaultBudget),
+                // Overview Stats Cards
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 25, 20, 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _buildValueCard(
+                            title: "MONTHLY GOAL",
+                            value: defaultBudget,
+                            color: Colors.blue.shade700,
+                            icon: Icons.track_changes_rounded,
+                            onTap: () => _showUpdateBudgetDialog(defaultBudget),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 15),
-                      Expanded(
-                        child: _buildValueCard(
-                          title: "TOTAL SAVINGS",
-                          value: savings,
-                          color: Colors.green.shade700,
-                          icon: Icons.account_balance_wallet_rounded,
-                          onTap: () {},
+                        const SizedBox(width: 15),
+                        Expanded(
+                          child: _buildValueCard(
+                            title: "TOTAL SAVINGS",
+                            value: savings,
+                            color: Colors.green.shade700,
+                            icon: Icons.account_balance_wallet_rounded,
+                            onTap: () {},
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
 
-              //Preferences
-              SliverPadding(
-                padding: const EdgeInsets.all(25),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    const Text(
-                      "PREFERENCES",
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                        letterSpacing: 1.5,
+                //  Settings List
+                SliverPadding(
+                  padding: const EdgeInsets.all(25),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      const Text(
+                        "PREFERENCES",
+                        style: TextStyle(
+                          color: Colors.grey,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                          letterSpacing: 1.5,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildSettingItem(
-                      icon: Icons.notifications_none_rounded,
-                      title: "Notifications",
-                      trailing: "On",
-                      color: Colors.orange,
-                    ),
-                    _buildSettingItem(
-                      icon: Icons.security_rounded,
-                      title: "Privacy & Security",
-                      trailing: "",
-                      color: Colors.blueGrey,
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      "ACCOUNT",
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                        letterSpacing: 1.5,
+                      const SizedBox(height: 16),
+                      _buildSettingItem(
+                        icon: Icons.notifications_none_rounded,
+                        title: "Notifications",
+                        trailing: "On",
+                        color: Colors.orange,
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildSettingItem(
-                      icon: Icons.alternate_email_rounded,
-                      title: "Change Email",
-                      trailing: "",
-                      color: Colors.purple,
-                    ),
-                    _buildSettingItem(
-                      icon: Icons.delete_outline_rounded,
-                      title: "Delete Account",
-                      trailing: "",
-                      color: Colors.red,
-                      isLast: true,
-                    ),
-                  ]),
+                      _buildSettingItem(
+                        icon: Icons.security_rounded,
+                        title: "Privacy & Security",
+                        trailing: "",
+                        color: Colors.blueGrey,
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        "ACCOUNT",
+                        style: TextStyle(
+                          color: Colors.grey,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _buildSettingItem(
+                        icon: Icons.alternate_email_rounded,
+                        title: "Change Email",
+                        trailing: "",
+                        color: Colors.purple,
+                      ),
+                      _buildSettingItem(
+                        icon: Icons.delete_outline_rounded,
+                        title: "Delete Account",
+                        trailing: "",
+                        color: Colors.red,
+                        isLast: true,
+                      ),
+                    ]),
+                  ),
                 ),
-              ),
-            ],
-          );
-        },
-      ),
+              ],
+            ),
     );
   }
 

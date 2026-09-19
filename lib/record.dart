@@ -3,7 +3,6 @@ import 'package:watch_my_wallet/auth/auth_service.dart';
 class Record {
   int? id;
   String? uid;
-  String details;
   String description;
   String labelText;
   double amount;
@@ -13,7 +12,6 @@ class Record {
   Record({
     this.id,
     this.uid,
-    required this.details,
     required this.description,
     required this.amount,
     required this.labelText,
@@ -25,7 +23,6 @@ class Record {
     return Record(
       id: map["id"],
       uid: map["uuid"],
-      details: map["details"] ?? '',
       description: map["description"] ?? '',
       amount: (map["amount"] as num).toDouble(),
       labelText: map["label"] ?? '',
@@ -40,7 +37,6 @@ class Record {
     return {
       "description": description,
       "label": labelText,
-      "details": details,
       "amount": amount,
       "type": type,
       "uuid": userId,

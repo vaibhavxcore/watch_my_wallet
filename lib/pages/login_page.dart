@@ -1,8 +1,8 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:watch_my_wallet/pages/sign_up_page.dart';
 
-import '../auth/auth_service.dart';
+import '../providers/auth_provider.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -13,48 +13,33 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _authService = AuthService();
-  bool _isLoading = false;
-  // String? _error;
 
   Future<void> _signIn() async {
+    final authProvider = context.read<AuthProvider>();
     final messenger = ScaffoldMessenger.of(context);
-    setState(() {
-      _isLoading = true;
-    });
-    try {
-      await _authService.signInWithEmailAndPassword(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
 
-      messenger.showSnackBar(
-        SnackBar(
-          elevation: 0,
-          behavior: SnackBarBehavior.floating,
+    await authProvider.signIn(
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
+    );
 
-          backgroundColor: Colors.black,
-          content: Text(
-            'Sign In Successful🥳',
-            style: TextStyle(color: Colors.white),
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Something went wrong. Please try again!'),
-        ),
-      );
-      if (kDebugMode) {
-        print(e);
-      }
-    } finally {
+    if (authProvider.error != null) {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        messenger.showSnackBar(SnackBar(content: Text(authProvider.error!)));
+      }
+    } else {
+      if (mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            elevation: 0,
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.black,
+            content: Text(
+              'Sign In Successful🥳',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        );
       }
     }
   }
@@ -68,6 +53,8 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isLoading = context.watch<AuthProvider>().isLoading;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Sign In')),
       body: Padding(
@@ -79,11 +66,10 @@ class _LoginPageState extends State<LoginPage> {
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
               decoration: InputDecoration(
-                hint: Text('Email'),
-
+                hintText: 'Email',
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide(color: Colors.black),
+                  borderSide: const BorderSide(color: Colors.black),
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
@@ -96,10 +82,10 @@ class _LoginPageState extends State<LoginPage> {
               keyboardType: TextInputType.visiblePassword,
               obscureText: true,
               decoration: InputDecoration(
-                hint: Text('Password'),
+                hintText: 'Password',
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide(color: Colors.black),
+                  borderSide: const BorderSide(color: Colors.black),
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
@@ -108,22 +94,29 @@ class _LoginPageState extends State<LoginPage> {
             ),
             const SizedBox(height: 20),
             FilledButton(
-              onPressed: _signIn,
+              onPressed: isLoading ? null : _signIn,
               style: FilledButton.styleFrom(
                 foregroundColor: Colors.white,
                 backgroundColor: Colors.black,
-                fixedSize: Size(370, 50),
+                fixedSize: const Size(370, 50),
               ),
-              child: _isLoading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : Text('Log In'),
+              child: isLoading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Text('Log In'),
             ),
             const SizedBox(height: 16),
             TextButton(
               onPressed: () {
                 Navigator.of(
                   context,
-                ).push(MaterialPageRoute(builder: (_) => SignUpPage()));
+                ).push(MaterialPageRoute(builder: (_) => const SignUpPage()));
               },
               child: const Text(
                 'Create Account',
