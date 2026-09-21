@@ -151,39 +151,45 @@ class _CalendarPageState extends State<CalendarPage> {
                       ),
                     ],
                   ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.all(12),
-                    leading: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: categoryIcon
-                            .getCategoryColor(rec.labelText)
-                            .withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(16),
+                  child: Material(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(22),
+                    clipBehavior: Clip.antiAlias,
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.all(12),
+                      onLongPress: () => _confirmDelete(context, rec),
+                      leading: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: categoryIcon
+                              .getCategoryColor(rec.labelText)
+                              .withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(
+                          categoryIcon.getCategoryIcon(rec.labelText),
+                          color: categoryIcon.getCategoryColor(rec.labelText),
+                          size: 24,
+                        ),
                       ),
-                      child: Icon(
-                        categoryIcon.getCategoryIcon(rec.labelText),
-                        color: categoryIcon.getCategoryColor(rec.labelText),
-                        size: 24,
+                      title: Text(
+                        rec.description,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
                       ),
-                    ),
-                    title: Text(
-                      rec.description,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                      subtitle: Text(
+                        rec.labelText,
+                        style: TextStyle(color: Colors.grey[600], fontSize: 13),
                       ),
-                    ),
-                    subtitle: Text(
-                      rec.labelText,
-                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                    ),
-                    trailing: Text(
-                      "${isIncome ? '+' : '-'} ₹${NumberFormat("#,##,###.##").format(rec.amount)}",
-                      style: TextStyle(
-                        color: isIncome ? Colors.green[700] : Colors.red[700],
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
+                      trailing: Text(
+                        "${isIncome ? '+' : '-'} ₹${NumberFormat("#,##,###.##").format(rec.amount)}",
+                        style: TextStyle(
+                          color: isIncome ? Colors.green[700] : Colors.red[700],
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
                       ),
                     ),
                   ),
@@ -195,6 +201,43 @@ class _CalendarPageState extends State<CalendarPage> {
         const SliverToBoxAdapter(child: SizedBox(height: 100)),
       ],
     );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, Record record) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete transaction?'),
+        content: const Text(
+          'This transaction will be removed from your lists.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (shouldDelete != true || !context.mounted) return;
+    try {
+      await context.read<ExpenseProvider>().deleteRecord(record);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Transaction deleted')));
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not delete transaction')),
+        );
+      }
+    }
   }
 
   Widget _buildErrorWidget(String error) {

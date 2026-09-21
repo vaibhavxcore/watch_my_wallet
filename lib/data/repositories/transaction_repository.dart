@@ -40,6 +40,16 @@ class TransactionRepository {
     return rows.map(LocalTransaction.fromMap).toList();
   }
 
+  Future<LocalTransaction?> getById(String id) async {
+    final rows = await _localDatabase.database.query(
+      'transactions',
+      where: 'id = ? AND deleted_at IS NULL',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : LocalTransaction.fromMap(rows.first);
+  }
+
   Future<LocalTransaction> create({
     required String userId,
     required String accountId,

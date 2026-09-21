@@ -241,16 +241,19 @@ class _AddRecordState extends State<AddRecord> {
                         ),
                       ],
                       selected: {_selectedType},
-                      onSelectionChanged: (val) => setState(() {
-                        _selectedType = val.first;
+                      onSelectionChanged: (val) {
+                        final selectedType = val.first;
                         labelValueListenable.value = null;
                         _selectedCategoryId = null;
+                        setState(() {
+                          _selectedType = selectedType;
+                        });
                         expenseProvider.loadCategories(
-                          val.first == RecordType.income
+                          selectedType == RecordType.income
                               ? LocalTransactionType.income
                               : LocalTransactionType.expense,
                         );
-                      }),
+                      },
                       style: SegmentedButton.styleFrom(
                         selectedBackgroundColor: Colors.black,
                         selectedForegroundColor: Colors.white,

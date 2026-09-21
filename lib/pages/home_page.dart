@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:watch_my_wallet/core/utils/category_icons_data.dart';
 import 'package:watch_my_wallet/providers/auth_provider.dart';
 import 'package:watch_my_wallet/providers/expense_provider.dart';
+import 'package:watch_my_wallet/record.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -317,7 +318,8 @@ class _HomePageState extends State<HomePage> {
                           color: Colors.transparent,
                           child: InkWell(
                             borderRadius: BorderRadius.circular(24),
-                            onTap: () {},
+                            onTap: () => _editRecord(context, rec),
+                            onLongPress: () => _confirmDelete(context, rec),
                             child: Padding(
                               padding: const EdgeInsets.all(16),
                               child: Row(
@@ -406,6 +408,67 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _confirmDelete(BuildContext context, Record record) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete transaction?'),
+        content: const Text(
+          'This transaction will be removed from your lists.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (shouldDelete != true || !context.mounted) return;
+    try {
+      await context.read<ExpenseProvider>().deleteRecord(record);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Transaction deleted')));
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not delete transaction')),
+        );
+      }
+    }
+  }
+
+  Future<void> _editRecord(BuildContext context, Record record) async {
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (_) => EditRecordDialog(record: record),
+    );
+    if (result == null || !context.mounted) return;
+    final amount = double.tryParse(result['amount'] ?? '');
+    final note = result['note']?.trim() ?? '';
+    if (amount == null || amount <= 0 || note.isEmpty) return;
+    try {
+      await context.read<ExpenseProvider>().updateRecord(
+        record,
+        amount: amount,
+        note: note,
+      );
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update transaction')),
+        );
+      }
+    }
+  }
+
   Widget _buildSummaryTile(
     String title,
     double amount,
@@ -452,6 +515,70 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class EditRecordDialog extends StatefulWidget {
+  final Record record;
+
+  const EditRecordDialog({super.key, required this.record});
+
+  @override
+  State<EditRecordDialog> createState() => _EditRecordDialogState();
+}
+
+class _EditRecordDialogState extends State<EditRecordDialog> {
+  late final TextEditingController _amountController;
+  late final TextEditingController _noteController;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController = TextEditingController(
+      text: widget.record.amount.toStringAsFixed(2),
+    );
+    _noteController = TextEditingController(text: widget.record.description);
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit transaction'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _amountController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'Amount'),
+          ),
+          TextField(
+            controller: _noteController,
+            decoration: const InputDecoration(labelText: 'Note'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop({
+            'amount': _amountController.text,
+            'note': _noteController.text,
+          }),
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }

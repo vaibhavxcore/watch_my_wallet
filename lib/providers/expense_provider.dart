@@ -9,6 +9,7 @@ class ExpenseProvider extends ChangeNotifier {
   final TransactionRepository _repository;
 
   List<Record> _records = [];
+  final Map<String, LocalTransaction> _localTransactions = {};
   List<LocalAccount> _accounts = [];
   List<LocalCategory> _categories = [];
   double _budget = 0.0;
@@ -75,6 +76,13 @@ class ExpenseProvider extends ChangeNotifier {
 
     try {
       final localRecords = await _repository.getAll();
+      _localTransactions
+        ..clear()
+        ..addEntries(
+          localRecords.map(
+            (transaction) => MapEntry(transaction.id, transaction),
+          ),
+        );
       _accounts = await _repository.getAccounts();
       _categories = await _repository.getCategories(
         type: LocalTransactionType.expense,
@@ -133,6 +141,68 @@ class ExpenseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> deleteRecord(Record record) async {
+    final id = record.id;
+    if (id == null) return;
+    final transaction = _localTransactions[id] ?? await _repository.getById(id);
+    if (transaction == null) return;
+
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      await _repository.softDelete(transaction);
+      await initialize();
+    } catch (e) {
+      _error = _handleError(e);
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateRecord(
+    Record record, {
+    required double amount,
+    required String note,
+  }) async {
+    final id = record.id;
+    if (id == null) return;
+    final transaction = _localTransactions[id] ?? await _repository.getById(id);
+    if (transaction == null) return;
+
+    try {
+      final updated = await _repository.update(
+        LocalTransaction(
+          id: transaction.id,
+          userId: transaction.userId,
+          accountId: transaction.accountId,
+          categoryId: transaction.categoryId,
+          amount: amount,
+          type: transaction.type,
+          note: note,
+          date: transaction.date,
+          createdAt: transaction.createdAt,
+          updatedAt: transaction.updatedAt,
+          deletedAt: transaction.deletedAt,
+          syncStatus: transaction.syncStatus,
+        ),
+      );
+      _localTransactions[updated.id] = updated;
+      final index = _records.indexWhere((item) => item.id == updated.id);
+      if (index != -1) {
+        _records[index] = _toLegacyRecord(updated);
+        _records.sort((a, b) => b.date.compareTo(a.date));
+      }
+      _error = null;
+      notifyListeners();
+    } catch (e) {
+      _error = _handleError(e);
+      rethrow;
+    }
+  }
+
   String _categoryId(Record record) {
     final type = record.type == 'Income' ? 'income' : 'expense';
     final label = record.labelText.toLowerCase() == 'others'
@@ -147,7 +217,7 @@ class ExpenseProvider extends ChangeNotifier {
         : 'Expense';
     final category = transaction.categoryId.split('_').skip(2).join('_');
     return Record(
-      id: transaction.id.hashCode,
+      id: transaction.id,
       uid: transaction.userId,
       description: transaction.note,
       labelText: category.isEmpty ? 'Other' : _titleCase(category),

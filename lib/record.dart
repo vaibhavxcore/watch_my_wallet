@@ -1,7 +1,7 @@
 import 'package:watch_my_wallet/auth/auth_service.dart';
 
 class Record {
-  int? id;
+  String? id;
   String? uid;
   String description;
   String labelText;
@@ -21,7 +21,7 @@ class Record {
 
   factory Record.fromMap(Map<String, dynamic> map) {
     return Record(
-      id: map["id"],
+      id: map["id"]?.toString(),
       uid: map["uuid"],
       description: map["description"] ?? '',
       amount: (map["amount"] as num).toDouble(),
