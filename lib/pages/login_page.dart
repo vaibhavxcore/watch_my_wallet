@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:watch_my_wallet/pages/sign_up_page.dart';
+import 'package:watch_my_wallet/pages/main_layout.dart';
 
 import '../providers/auth_provider.dart';
 
@@ -120,6 +121,19 @@ class _LoginPageState extends State<LoginPage> {
               },
               child: const Text(
                 'Create Account',
+                style: TextStyle(color: Colors.black),
+              ),
+            ),
+            TextButton(
+              onPressed: isLoading
+                  ? null
+                  : () {
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(builder: (_) => const MainLayout()),
+                      );
+                    },
+              child: const Text(
+                'Continue Offline',
                 style: TextStyle(color: Colors.black),
               ),
             ),

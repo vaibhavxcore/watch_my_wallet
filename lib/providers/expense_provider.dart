@@ -1,16 +1,16 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
+import '../data/local/local_database.dart';
+import '../data/models/local_entities.dart';
+import '../data/repositories/transaction_repository.dart';
 import '../record.dart';
-import '../record_database.dart';
 
 class ExpenseProvider extends ChangeNotifier {
-  final RecordDatabase _db = RecordDatabase();
+  final TransactionRepository _repository;
 
   List<Record> _records = [];
   double _budget = 0.0;
-  double _extraIncome = 0.0;
+  final double _extraIncome = 0.0;
   double _defaultBudget = 0.0;
   bool _isLoading = false;
   String? _error;
@@ -61,44 +61,25 @@ class ExpenseProvider extends ChangeNotifier {
     return breakdown;
   }
 
-  StreamSubscription? _recordSub;
-  StreamSubscription? _budgetSub;
+  ExpenseProvider(LocalDatabase database)
+    : _repository = TransactionRepository(database);
 
-  void initialize() {
+  Future<void> initialize() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
-    _recordSub?.cancel();
-    _recordSub = _db.stream.listen(
-      (data) {
-        _records = data;
-        _records.sort((a, b) => b.date.compareTo(a.date));
-        _isLoading = false;
-        _error = null;
-        notifyListeners();
-      },
-      onError: (err) {
-        _error = _handleError(err);
-        _isLoading = false;
-        notifyListeners();
-      },
-    );
-
-    _budgetSub?.cancel();
-    _budgetSub = _db.budgetDataStream.listen(
-      (data) {
-        _budget = data['budget'] ?? 0.0;
-        _extraIncome = data['extra_income'] ?? 0.0;
-        _defaultBudget = data['default_budget'] ?? 0.0;
-        _error = null;
-        notifyListeners();
-      },
-      onError: (err) {
-        _error = _handleError(err);
-        notifyListeners();
-      },
-    );
+    try {
+      final localRecords = await _repository.getAll();
+      _records = localRecords.map(_toLegacyRecord).toList();
+      _records.sort((a, b) => b.date.compareTo(a.date));
+      _error = null;
+    } catch (e) {
+      _error = _handleError(e);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> addRecord(Record record, {bool toBudget = false}) async {
@@ -107,14 +88,18 @@ class ExpenseProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _db.createRecord(record);
-      if (record.type == "Income") {
-        if (toBudget) {
-          await _db.addIncomeToBudget(record.amount);
-        } else {
-          await _db.addIncomeToSavings(record.amount);
-        }
-      }
+      await _repository.create(
+        userId: 'guest',
+        accountId: 'account_cash',
+        categoryId: _categoryId(record),
+        amount: record.amount,
+        type: record.type == 'Income'
+            ? LocalTransactionType.income
+            : LocalTransactionType.expense,
+        note: record.description,
+        date: record.date,
+      );
+      await initialize();
     } catch (e) {
       _error = _handleError(e);
       rethrow;
@@ -125,17 +110,44 @@ class ExpenseProvider extends ChangeNotifier {
   }
 
   Future<void> updateBudgetGoal(double amount) async {
-    _isLoading = true;
-    _error = null;
+    _defaultBudget = amount;
+    _budget = amount;
     notifyListeners();
-    try {
-      await _db.updateDefaultBudget(amount);
-    } catch (e) {
-      _error = _handleError(e);
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+  }
+
+  String _categoryId(Record record) {
+    final type = record.type == 'Income' ? 'income' : 'expense';
+    final label = record.labelText.toLowerCase() == 'others'
+        ? 'other'
+        : record.labelText.toLowerCase();
+    return 'category_${type}_$label';
+  }
+
+  Record _toLegacyRecord(LocalTransaction transaction) {
+    final type = transaction.type == LocalTransactionType.income
+        ? 'Income'
+        : 'Expense';
+    final category = transaction.categoryId.split('_').skip(2).join('_');
+    return Record(
+      id: transaction.id.hashCode,
+      uid: transaction.userId,
+      description: transaction.note,
+      labelText: category.isEmpty ? 'Other' : _titleCase(category),
+      amount: transaction.amount,
+      type: type,
+      date: transaction.date.toLocal(),
+    );
+  }
+
+  String _titleCase(String value) {
+    return value
+        .split('_')
+        .map(
+          (word) => word.isEmpty
+              ? word
+              : '${word[0].toUpperCase()}${word.substring(1)}',
+        )
+        .join(' ');
   }
 
   String _handleError(dynamic e) {
@@ -149,12 +161,5 @@ class ExpenseProvider extends ChangeNotifier {
       return "Access denied. Please check your RLS policies in Supabase.";
     }
     return "Something went wrong. Please try again.";
-  }
-
-  @override
-  void dispose() {
-    _recordSub?.cancel();
-    _budgetSub?.cancel();
-    super.dispose();
   }
 }

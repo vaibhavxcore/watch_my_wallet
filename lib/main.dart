@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:watch_my_wallet/providers/auth_provider.dart';
 import 'package:watch_my_wallet/providers/expense_provider.dart';
 import 'package:watch_my_wallet/screens/splash_screen.dart';
+import 'package:watch_my_wallet/data/local/local_database.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,12 +13,17 @@ Future<void> main() async {
     url: 'https://ogszlpztuzbiynfpaawl.supabase.co',
     publishableKey: 'sb_publishable_ZPInXnFqS3L59Lv1bJpHqA_B_Qx85pv',
   );
+  final localDatabase = await LocalDatabase.open(
+    key: 'watch-my-wallet-local-key',
+  );
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()..initialize()),
-        ChangeNotifierProvider(create: (_) => ExpenseProvider()..initialize()),
+        ChangeNotifierProvider(
+          create: (_) => ExpenseProvider(localDatabase)..initialize(),
+        ),
       ],
       child: const MyApp(),
     ),
