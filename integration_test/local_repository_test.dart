@@ -18,7 +18,7 @@ void main() {
     final categories = await database.database.query('categories');
     expect(accounts.map((row) => row['name']), contains('Cash'));
     expect(accounts.map((row) => row['name']), contains('Savings Account'));
-    expect(categories, hasLength(16));
+    expect(categories, hasLength(18));
 
     final created = await repository.create(
       userId: 'guest',

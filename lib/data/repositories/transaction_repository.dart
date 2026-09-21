@@ -9,6 +9,27 @@ class TransactionRepository {
 
   const TransactionRepository(this._localDatabase);
 
+  Future<List<LocalAccount>> getAccounts() async {
+    final rows = await _localDatabase.database.query(
+      'accounts',
+      where: 'deleted_at IS NULL',
+      orderBy: 'name ASC',
+    );
+    return rows.map(LocalAccount.fromMap).toList();
+  }
+
+  Future<List<LocalCategory>> getCategories({
+    required LocalTransactionType type,
+  }) async {
+    final rows = await _localDatabase.database.query(
+      'categories',
+      where: 'type = ? AND deleted_at IS NULL',
+      whereArgs: [type.name],
+      orderBy: 'name ASC',
+    );
+    return rows.map(LocalCategory.fromMap).toList();
+  }
+
   Future<List<LocalTransaction>> getAll({String userId = 'guest'}) async {
     final rows = await _localDatabase.database.query(
       'transactions',

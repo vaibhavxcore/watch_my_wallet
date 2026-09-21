@@ -9,6 +9,8 @@ class ExpenseProvider extends ChangeNotifier {
   final TransactionRepository _repository;
 
   List<Record> _records = [];
+  List<LocalAccount> _accounts = [];
+  List<LocalCategory> _categories = [];
   double _budget = 0.0;
   final double _extraIncome = 0.0;
   double _defaultBudget = 0.0;
@@ -17,6 +19,8 @@ class ExpenseProvider extends ChangeNotifier {
 
   // Getters
   List<Record> get records => _records;
+  List<LocalAccount> get accounts => List.unmodifiable(_accounts);
+  List<LocalCategory> get categories => List.unmodifiable(_categories);
   double get budget => _budget;
   double get extraIncome => _extraIncome;
   double get defaultBudget => _defaultBudget;
@@ -71,6 +75,10 @@ class ExpenseProvider extends ChangeNotifier {
 
     try {
       final localRecords = await _repository.getAll();
+      _accounts = await _repository.getAccounts();
+      _categories = await _repository.getCategories(
+        type: LocalTransactionType.expense,
+      );
       _records = localRecords.map(_toLegacyRecord).toList();
       _records.sort((a, b) => b.date.compareTo(a.date));
       _error = null;
@@ -82,7 +90,17 @@ class ExpenseProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> addRecord(Record record, {bool toBudget = false}) async {
+  Future<void> loadCategories(LocalTransactionType type) async {
+    _categories = await _repository.getCategories(type: type);
+    notifyListeners();
+  }
+
+  Future<void> addRecord(
+    Record record, {
+    bool toBudget = false,
+    String? accountId,
+    String? categoryId,
+  }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -90,8 +108,8 @@ class ExpenseProvider extends ChangeNotifier {
     try {
       await _repository.create(
         userId: 'guest',
-        accountId: 'account_cash',
-        categoryId: _categoryId(record),
+        accountId: accountId ?? 'account_cash',
+        categoryId: categoryId ?? _categoryId(record),
         amount: record.amount,
         type: record.type == 'Income'
             ? LocalTransactionType.income

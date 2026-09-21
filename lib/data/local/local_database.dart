@@ -3,7 +3,7 @@ import 'package:sqflite_sqlcipher/sqflite.dart';
 
 class LocalDatabase {
   static const databaseName = 'watch_my_wallet.db';
-  static const databaseVersion = 1;
+  static const databaseVersion = 2;
 
   final Database database;
 
@@ -21,6 +21,12 @@ class LocalDatabase {
       onCreate: (database, version) async {
         await _createSchema(database);
         await _seedDefaults(database);
+      },
+      onUpgrade: (database, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await _addDefaultCategory(database, 'Fuel', 'expense');
+          await _addDefaultCategory(database, 'Grocery', 'expense');
+        }
       },
     );
     return LocalDatabase._(database);
@@ -180,7 +186,9 @@ class LocalDatabase {
     ];
     const expenseCategories = [
       'Food',
+      'Grocery',
       'Travel',
+      'Fuel',
       'Shopping',
       'Bills',
       'Rent',
@@ -235,6 +243,31 @@ class LocalDatabase {
     await database.insert('sync_metadata', {
       'key': 'last_sync_at',
       'value': '',
+    });
+  }
+
+  static Future<void> _addDefaultCategory(
+    DatabaseExecutor database,
+    String name,
+    String type,
+  ) async {
+    final existing = await database.query(
+      'categories',
+      columns: ['id'],
+      where: 'id = ?',
+      whereArgs: ['category_${type}_$name'.toLowerCase()],
+      limit: 1,
+    );
+    if (existing.isNotEmpty) return;
+
+    final now = DateTime.now().toUtc().toIso8601String();
+    await database.insert('categories', {
+      'id': 'category_${type}_$name'.toLowerCase(),
+      'name': name,
+      'type': type,
+      'is_default': 1,
+      'created_at': now,
+      'updated_at': now,
     });
   }
 }
