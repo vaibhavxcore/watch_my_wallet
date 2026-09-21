@@ -33,8 +33,9 @@ class RecordDatabase {
 
   Stream<Map<String, double>> get budgetDataStream {
     final userId = _client.auth.currentUser?.id;
-    if (userId == null)
+    if (userId == null) {
       return Stream.value({'budget': 0.0, 'extra_income': 0.0});
+    }
 
     return _client
         .from('profiles')
@@ -42,12 +43,13 @@ class RecordDatabase {
         .eq('id', userId)
         .asyncMap((data) async {
           try {
-            if (data.isEmpty)
+            if (data.isEmpty) {
               return {
                 'budget': 0.0,
                 'extra_income': 0.0,
                 'default_budget': 0.0,
               };
+            }
 
             final profile = data.first;
             double currentBudget =
