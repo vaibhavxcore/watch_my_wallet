@@ -157,21 +157,21 @@ class ExpenseProvider extends ChangeNotifier {
     final existing = _localTransactions[id] ?? await _repository.getById(id);
     if (existing == null) return null;
 
-    _isLoading = true;
-    _error = null;
+    _localTransactions.remove(id);
+    _transactions = _transactions.where((item) => item.id != id).toList();
     notifyListeners();
+
+    _error = null;
     try {
       await _repository.softDelete(existing);
-      _localTransactions.remove(id);
-      _transactions = _transactions.where((item) => item.id != id).toList();
-      notifyListeners();
       return existing;
     } catch (e) {
+      _localTransactions[id] = existing;
+      _transactions = [..._transactions, existing]
+        ..sort((a, b) => b.date.compareTo(a.date));
       _error = _handleError(e);
-      rethrow;
-    } finally {
-      _isLoading = false;
       notifyListeners();
+      rethrow;
     }
   }
 

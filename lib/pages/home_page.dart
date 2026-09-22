@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -450,21 +452,40 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                         onDismissed: (_) async {
-                          final deleted = await context
-                              .read<ExpenseProvider>()
-                              .deleteTransaction(rec);
-                          if (!context.mounted || deleted == null) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text('Transaction deleted'),
-                              action: SnackBarAction(
-                                label: 'Undo',
-                                onPressed: () => context
-                                    .read<ExpenseProvider>()
-                                    .restoreTransaction(deleted),
+                          final provider = context.read<ExpenseProvider>();
+                          final messenger = ScaffoldMessenger.of(context);
+                          try {
+                            final deleted = await provider.deleteTransaction(
+                              rec,
+                            );
+                            if (!messenger.mounted || deleted == null) return;
+                            late final ScaffoldFeatureController<
+                              SnackBar,
+                              SnackBarClosedReason
+                            >
+                            snackbar;
+                            snackbar = messenger.showSnackBar(
+                              SnackBar(
+                                content: const Text('Transaction deleted'),
+                                duration: const Duration(seconds: 3),
+                                action: SnackBarAction(
+                                  label: 'Undo',
+                                  onPressed: () async {
+                                    snackbar.close();
+                                    await provider.restoreTransaction(deleted);
+                                  },
+                                ),
                               ),
-                            ),
-                          );
+                            );
+                            Timer(const Duration(seconds: 3), snackbar.close);
+                          } catch (_) {
+                            if (!messenger.mounted) return;
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                content: Text('Could not delete transaction'),
+                              ),
+                            );
+                          }
                         },
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 16),
