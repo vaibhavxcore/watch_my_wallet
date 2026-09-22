@@ -490,10 +490,10 @@ class _AccountPageState extends State<AccountPage> {
                         ),
                         _buildSettingItem(
                           icon: Icons.account_balance_wallet_outlined,
-                          title: 'Account balances',
+                          title: 'Manage accounts',
                           trailing: '${expenseProvider.accountBalances.length}',
                           color: Colors.indigo,
-                          onTap: () => _showBalances(expenseProvider),
+                          onTap: () => _showAccounts(expenseProvider),
                         ),
                         _buildSettingItem(
                           icon: Icons.tune,
@@ -781,28 +781,164 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  void _showBalances(ExpenseProvider provider) {
-    showDialog<void>(
+  Future<void> _showAccounts(ExpenseProvider provider) async {
+    await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Account balances'),
+        title: const Text('Manage accounts'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: provider.accounts
+                .map(
+                  (account) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(account.name),
+                    subtitle: Text(
+                      'Opening: ₹${NumberFormat('#,##,###.##').format(account.openingBalance)}',
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '₹${NumberFormat('#,##,###.##').format(provider.accountBalances[account.id] ?? 0)}',
+                        ),
+                        PopupMenuButton<String>(
+                          onSelected: (action) async {
+                            Navigator.pop(dialogContext);
+                            if (action == 'edit') {
+                              await _showAccountEditor(
+                                provider,
+                                account: account,
+                              );
+                            } else {
+                              await _confirmArchiveAccount(provider, account);
+                            }
+                          },
+                          itemBuilder: (context) => const [
+                            PopupMenuItem(value: 'edit', child: Text('Edit')),
+                            PopupMenuItem(
+                              value: 'archive',
+                              child: Text('Archive'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              await _showAccountEditor(provider);
+            },
+            child: const Text('Add account'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAccountEditor(
+    ExpenseProvider provider, {
+    LocalAccount? account,
+  }) async {
+    _nameController.text = account?.name ?? '';
+    _amountController.text = account == null
+        ? ''
+        : account.openingBalance.toString();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(account == null ? 'New account' : 'Edit account'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          children: provider.accounts
-              .map(
-                (account) => ListTile(
-                  title: Text(account.name),
-                  trailing: Text(
-                    '₹${NumberFormat('#,##,###.##').format(provider.accountBalances[account.id] ?? 0)}',
-                  ),
-                ),
-              )
-              .toList(),
+          children: [
+            TextField(
+              controller: _nameController,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Account name'),
+            ),
+            TextField(
+              controller: _amountController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+                signed: true,
+              ),
+              decoration: const InputDecoration(labelText: 'Opening balance'),
+            ),
+          ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Close'),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final name = _nameController.text.trim();
+              final openingBalance = double.tryParse(_amountController.text);
+              if (name.isEmpty || openingBalance == null) return;
+              if (account == null) {
+                await provider.addAccount(
+                  name: name,
+                  openingBalance: openingBalance,
+                );
+              } else {
+                await provider.updateAccount(
+                  account: account,
+                  name: name,
+                  openingBalance: openingBalance,
+                );
+              }
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+            },
+            child: Text(account == null ? 'Add' : 'Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmArchiveAccount(
+    ExpenseProvider provider,
+    LocalAccount account,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Archive ${account.name}?'),
+        content: const Text(
+          'Archived accounts are removed from new transactions, but their past records remain available.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              try {
+                await provider.archiveAccount(account);
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+              } on StateError catch (error) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(error.message.toString())),
+                );
+              }
+            },
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Archive'),
           ),
         ],
       ),

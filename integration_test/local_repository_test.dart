@@ -85,4 +85,111 @@ void main() {
     await reopened.close();
     await LocalDatabase.deleteDatabase();
   });
+
+  testWidgets('local finance settings and recurring records persist', (
+    tester,
+  ) async {
+    await LocalDatabase.deleteDatabase();
+    final database = await LocalDatabase.open(key: 'milestone-one-test-key');
+    final repository = TransactionRepository(database);
+
+    final customCategory = await repository.createCategory(
+      name: 'Pet care',
+      type: LocalTransactionType.expense,
+    );
+    expect(
+      (await repository.getCategories(
+        type: LocalTransactionType.expense,
+      )).map((category) => category.name),
+      contains('Pet care'),
+    );
+
+    await repository.saveBudget(5000);
+    await repository.saveCategoryBudget(
+      categoryId: customCategory.id,
+      amount: 750,
+    );
+    expect((await repository.getBudget())!.amount, 5000);
+    expect((await repository.getCategoryBudgets()).single.amount, 750);
+
+    final goal = await repository.saveSavingsGoal(
+      name: 'Emergency fund',
+      targetAmount: 10000,
+      targetDate: DateTime(2027, 1, 1),
+    );
+    await repository.updateSavingsGoalAmount(goal: goal, currentAmount: 1200);
+    expect((await repository.getSavingsGoals()).single.currentAmount, 1200);
+
+    await repository.saveSetting('theme_mode', 'dark');
+    expect(await repository.getSetting('theme_mode'), 'dark');
+
+    final newAccount = await repository.createAccount(
+      name: 'Travel fund',
+      openingBalance: 250,
+    );
+    final updatedAccount = await repository.updateAccount(
+      account: newAccount,
+      name: 'Holiday fund',
+      openingBalance: 300,
+    );
+    expect(
+      (await repository.getAccounts()).map((account) => account.name),
+      contains('Holiday fund'),
+    );
+    expect((await repository.getAccountBalances())[updatedAccount.id], 300);
+
+    final now = DateTime.now().toUtc();
+    await repository.create(
+      userId: 'guest',
+      accountId: 'account_cash',
+      categoryId: 'category_income_salary',
+      amount: 1000,
+      type: LocalTransactionType.income,
+      note: 'Payday',
+      date: now,
+    );
+    await repository.create(
+      userId: 'guest',
+      accountId: 'account_cash',
+      categoryId: customCategory.id,
+      amount: 400,
+      type: LocalTransactionType.expense,
+      note: 'Vet visit',
+      date: now,
+    );
+    await repository.create(
+      userId: 'guest',
+      accountId: 'account_cash',
+      categoryId: customCategory.id,
+      amount: 50,
+      type: LocalTransactionType.expense,
+      note: 'Weekly pet supplies',
+      date: now.subtract(const Duration(days: 8)),
+      isRecurring: true,
+      frequency: 'weekly',
+    );
+    await repository.processRecurringTransactions();
+
+    expect((await repository.getAccountBalances())['account_cash'], 500);
+    expect(await repository.getAll(), hasLength(4));
+    final recurringRows = await database.database.query(
+      'recurring_transactions',
+    );
+    expect(recurringRows, hasLength(1));
+    expect(
+      DateTime.parse(
+        recurringRows.single['next_occurrence']! as String,
+      ).isAfter(now),
+      isTrue,
+    );
+
+    await repository.archiveAccount(updatedAccount);
+    expect(
+      (await repository.getAccounts()).map((account) => account.id),
+      isNot(contains(updatedAccount.id)),
+    );
+
+    await database.close();
+    await LocalDatabase.deleteDatabase();
+  });
 }

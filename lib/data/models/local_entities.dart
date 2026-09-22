@@ -5,6 +5,7 @@ enum SyncStatus { synced, pendingCreate, pendingUpdate, pendingDelete, failed }
 class LocalAccount {
   final String id;
   final String name;
+  final double openingBalance;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
@@ -12,6 +13,7 @@ class LocalAccount {
   const LocalAccount({
     required this.id,
     required this.name,
+    required this.openingBalance,
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,
@@ -21,6 +23,7 @@ class LocalAccount {
     return LocalAccount(
       id: map['id']! as String,
       name: map['name']! as String,
+      openingBalance: (map['opening_balance'] as num? ?? 0).toDouble(),
       createdAt: DateTime.parse(map['created_at']! as String),
       updatedAt: DateTime.parse(map['updated_at']! as String),
       deletedAt: _dateOrNull(map['deleted_at']),

@@ -18,6 +18,73 @@ class TransactionRepository {
     return rows.map(LocalAccount.fromMap).toList();
   }
 
+  Future<LocalAccount> createAccount({
+    required String name,
+    required double openingBalance,
+    String userId = 'guest',
+  }) async {
+    final now = DateTime.now().toUtc();
+    final account = LocalAccount(
+      id: 'account_custom_${now.microsecondsSinceEpoch}',
+      name: name.trim(),
+      openingBalance: openingBalance,
+      createdAt: now,
+      updatedAt: now,
+    );
+    await _localDatabase.database.insert('accounts', {
+      'id': account.id,
+      'user_id': userId,
+      'name': account.name,
+      'opening_balance': account.openingBalance,
+      'created_at': now.toIso8601String(),
+      'updated_at': now.toIso8601String(),
+      'sync_status': SyncStatus.pendingCreate.name,
+    });
+    return account;
+  }
+
+  Future<LocalAccount> updateAccount({
+    required LocalAccount account,
+    required String name,
+    required double openingBalance,
+  }) async {
+    final now = DateTime.now().toUtc();
+    final updated = LocalAccount(
+      id: account.id,
+      name: name.trim(),
+      openingBalance: openingBalance,
+      createdAt: account.createdAt,
+      updatedAt: now,
+      deletedAt: account.deletedAt,
+    );
+    await _localDatabase.database.update(
+      'accounts',
+      {
+        'name': updated.name,
+        'opening_balance': updated.openingBalance,
+        'updated_at': now.toIso8601String(),
+        'sync_status': SyncStatus.pendingUpdate.name,
+      },
+      where: 'id = ? AND deleted_at IS NULL',
+      whereArgs: [account.id],
+    );
+    return updated;
+  }
+
+  Future<void> archiveAccount(LocalAccount account) async {
+    final now = DateTime.now().toUtc();
+    await _localDatabase.database.update(
+      'accounts',
+      {
+        'deleted_at': now.toIso8601String(),
+        'updated_at': now.toIso8601String(),
+        'sync_status': SyncStatus.pendingDelete.name,
+      },
+      where: 'id = ? AND deleted_at IS NULL',
+      whereArgs: [account.id],
+    );
+  }
+
   Future<List<LocalCategory>> getCategories({
     required LocalTransactionType type,
   }) async {

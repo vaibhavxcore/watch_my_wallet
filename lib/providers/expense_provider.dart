@@ -10,6 +10,7 @@ class ExpenseProvider extends ChangeNotifier {
   List<LocalTransaction> _transactions = [];
   final Map<String, LocalTransaction> _localTransactions = {};
   List<LocalAccount> _accounts = [];
+  final Map<String, String> _accountNames = {};
   List<LocalCategory> _categories = [];
   final Map<String, String> _categoryNames = {};
   double _budget = 0.0;
@@ -121,6 +122,7 @@ class ExpenseProvider extends ChangeNotifier {
           ),
         );
       _accounts = await _repository.getAccounts();
+      _rememberAccountNames(_accounts);
       _categories = await _repository.getCategories(
         type: LocalTransactionType.expense,
       );
@@ -201,6 +203,35 @@ class ExpenseProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<void> addAccount({
+    required String name,
+    required double openingBalance,
+  }) async {
+    await _repository.createAccount(name: name, openingBalance: openingBalance);
+    await _refreshAccounts();
+  }
+
+  Future<void> updateAccount({
+    required LocalAccount account,
+    required String name,
+    required double openingBalance,
+  }) async {
+    await _repository.updateAccount(
+      account: account,
+      name: name,
+      openingBalance: openingBalance,
+    );
+    await _refreshAccounts();
+  }
+
+  Future<void> archiveAccount(LocalAccount account) async {
+    if (_accounts.length <= 1) {
+      throw StateError('At least one account must remain active.');
+    }
+    await _repository.archiveAccount(account);
+    await _refreshAccounts();
   }
 
   Future<void> updateBudgetGoal(double amount) async {
@@ -372,10 +403,20 @@ class ExpenseProvider extends ChangeNotifier {
   }
 
   String accountName(String accountId) {
-    for (final account in _accounts) {
-      if (account.id == accountId) return account.name;
+    return _accountNames[accountId] ?? 'Unknown account';
+  }
+
+  Future<void> _refreshAccounts() async {
+    _accounts = await _repository.getAccounts();
+    _rememberAccountNames(_accounts);
+    _accountBalances = await _repository.getAccountBalances();
+    notifyListeners();
+  }
+
+  void _rememberAccountNames(Iterable<LocalAccount> accounts) {
+    for (final account in accounts) {
+      _accountNames[account.id] = account.name;
     }
-    return 'Unknown account';
   }
 
   String _handleError(dynamic e) {
