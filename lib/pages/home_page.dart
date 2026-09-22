@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:watch_my_wallet/core/utils/category_icons_data.dart';
 import 'package:watch_my_wallet/providers/auth_provider.dart';
 import 'package:watch_my_wallet/providers/expense_provider.dart';
-import 'package:watch_my_wallet/record.dart';
+import 'package:watch_my_wallet/data/models/local_entities.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -15,6 +15,16 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final categoryIcon = CategoryIconsData();
+  final _searchController = TextEditingController();
+  LocalTransactionType? _filterType;
+  String? _filterCategoryId;
+  DateTime? _filterDate;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,17 +36,40 @@ class _HomePageState extends State<HomePage> {
     final userEmail = authProvider.user?.email ?? "User";
     final userName = userEmail.split('@')[0];
 
-    final records = expenseProvider.records;
+    final transactions = expenseProvider.transactions;
+    final visibleTransactions = transactions.where((transaction) {
+      final query = _searchController.text.trim().toLowerCase();
+      final categoryName = expenseProvider.categoryName(transaction.categoryId);
+      final matchesQuery =
+          query.isEmpty ||
+          transaction.note.toLowerCase().contains(query) ||
+          categoryName.toLowerCase().contains(query) ||
+          expenseProvider
+              .accountName(transaction.accountId)
+              .toLowerCase()
+              .contains(query);
+      final matchesType =
+          _filterType == null || transaction.type == _filterType;
+      final matchesCategory =
+          _filterCategoryId == null ||
+          transaction.categoryId == _filterCategoryId;
+      final matchesDate =
+          _filterDate == null ||
+          (transaction.date.year == _filterDate!.year &&
+              transaction.date.month == _filterDate!.month &&
+              transaction.date.day == _filterDate!.day);
+      return matchesQuery && matchesType && matchesCategory && matchesDate;
+    }).toList();
     final currentBudgetLimit = expenseProvider.budget;
     final totalSavings = expenseProvider.extraIncome;
 
-    if (expenseProvider.isLoading && records.isEmpty) {
+    if (expenseProvider.isLoading && transactions.isEmpty) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator.adaptive()),
       );
     }
 
-    if (expenseProvider.error != null && records.isEmpty) {
+    if (expenseProvider.error != null && transactions.isEmpty) {
       return Scaffold(
         body: Center(child: Text("Error: ${expenseProvider.error}")),
       );
@@ -46,12 +79,12 @@ class _HomePageState extends State<HomePage> {
     double monthlyExpenses = 0;
     double totalIncome = 0;
 
-    for (var rec in records) {
-      if (rec.type == "Expense") {
+    for (final rec in transactions) {
+      if (rec.type == LocalTransactionType.expense) {
         if (rec.date.month == now.month && rec.date.year == now.year) {
           monthlyExpenses += rec.amount;
         }
-      } else if (rec.type == "Income") {
+      } else if (rec.type == LocalTransactionType.income) {
         totalIncome += rec.amount;
       }
     }
@@ -281,7 +314,107 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
-          records.isEmpty
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: _searchController,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Search transactions',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchController.text.isEmpty
+                          ? null
+                          : IconButton(
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {});
+                              },
+                              icon: const Icon(Icons.clear),
+                            ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      ChoiceChip(
+                        label: const Text('All'),
+                        selected: _filterType == null,
+                        onSelected: (_) => setState(() => _filterType = null),
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: const Text('Expense'),
+                        selected: _filterType == LocalTransactionType.expense,
+                        onSelected: (_) => setState(
+                          () => _filterType = LocalTransactionType.expense,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: const Text('Income'),
+                        selected: _filterType == LocalTransactionType.income,
+                        onSelected: (_) => setState(
+                          () => _filterType = LocalTransactionType.income,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        tooltip: 'Filter by date',
+                        onPressed: () async {
+                          final date = await showDatePicker(
+                            context: context,
+                            initialDate: _filterDate ?? DateTime.now(),
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime.now(),
+                          );
+                          if (!mounted) return;
+                          setState(() => _filterDate = date);
+                        },
+                        icon: Icon(
+                          _filterDate == null
+                              ? Icons.event_outlined
+                              : Icons.event_available,
+                        ),
+                      ),
+                    ],
+                  ),
+                  DropdownButtonFormField<String>(
+                    initialValue: _filterCategoryId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Category',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: null,
+                        child: Text('All categories'),
+                      ),
+                      ...expenseProvider.categories.map(
+                        (category) => DropdownMenuItem<String>(
+                          value: category.id,
+                          child: Text(category.name),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _filterCategoryId = value),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          visibleTransactions.isEmpty
               ? const SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(
@@ -295,111 +428,146 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate((context, index) {
-                      final rec = records[index];
-                      final isIncome = rec.type == "Income";
+                      final rec = visibleTransactions[index];
+                      final isIncome = rec.type == LocalTransactionType.income;
+                      final categoryName = expenseProvider.categoryName(
+                        rec.categoryId,
+                      );
                       final dateFormatted = DateFormat(
                         'MMM dd, yyyy',
                       ).format(rec.date);
 
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.02),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
+                      return Dismissible(
+                        key: ValueKey(rec.id),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 24),
+                          color: Colors.red.shade700,
+                          child: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.white,
+                          ),
                         ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
+                        onDismissed: (_) async {
+                          final deleted = await context
+                              .read<ExpenseProvider>()
+                              .deleteTransaction(rec);
+                          if (!context.mounted || deleted == null) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text('Transaction deleted'),
+                              action: SnackBarAction(
+                                label: 'Undo',
+                                onPressed: () => context
+                                    .read<ExpenseProvider>()
+                                    .restoreTransaction(deleted),
+                              ),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
                             borderRadius: BorderRadius.circular(24),
-                            onTap: () => _editRecord(context, rec),
-                            onLongPress: () => _confirmDelete(context, rec),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: categoryIcon
-                                          .getCategoryColor(rec.labelText)
-                                          .withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(18),
-                                    ),
-                                    child: Icon(
-                                      categoryIcon.getCategoryIcon(
-                                        rec.labelText,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(24),
+                              onTap: () =>
+                                  _showTransactionDetails(context, rec),
+                              onLongPress: () => _confirmDelete(context, rec),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: categoryIcon
+                                            .getCategoryColor(categoryName)
+                                            .withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(18),
                                       ),
-                                      color: categoryIcon.getCategoryColor(
-                                        rec.labelText,
+                                      child: Icon(
+                                        categoryIcon.getCategoryIcon(
+                                          categoryName,
+                                        ),
+                                        color: categoryIcon.getCategoryColor(
+                                          categoryName,
+                                        ),
+                                        size: 26,
                                       ),
-                                      size: 26,
                                     ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            rec.note,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 17,
+                                              color: Color(0xFF1A1D1E),
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            categoryName,
+                                            style: TextStyle(
+                                              color: Colors.grey.shade500,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Column(
                                       crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                          CrossAxisAlignment.end,
                                       children: [
                                         Text(
-                                          rec.description,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w800,
+                                          "${isIncome ? '+' : '-'} ₹${NumberFormat("#,##,###.##").format(rec.amount)}",
+                                          style: TextStyle(
+                                            color: isIncome
+                                                ? Colors.green.shade700
+                                                : Colors.red.shade700,
+                                            fontWeight: FontWeight.w900,
                                             fontSize: 17,
-                                            color: Color(0xFF1A1D1E),
                                           ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          rec.labelText,
+                                          dateFormatted,
                                           style: TextStyle(
-                                            color: Colors.grey.shade500,
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
+                                            color: Colors.grey.shade400,
+                                            fontSize: 12,
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        "${isIncome ? '+' : '-'} ₹${NumberFormat("#,##,###.##").format(rec.amount)}",
-                                        style: TextStyle(
-                                          color: isIncome
-                                              ? Colors.green.shade700
-                                              : Colors.red.shade700,
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 17,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        dateFormatted,
-                                        style: TextStyle(
-                                          color: Colors.grey.shade400,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                         ),
                       );
-                    }, childCount: records.length),
+                    }, childCount: visibleTransactions.length),
                   ),
                 ),
           const SliverToBoxAdapter(child: SizedBox(height: 120)),
@@ -408,7 +576,50 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, Record record) async {
+  Future<void> _showTransactionDetails(
+    BuildContext context,
+    LocalTransaction transaction,
+  ) async {
+    final provider = context.read<ExpenseProvider>();
+    final shouldEdit = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(provider.categoryName(transaction.categoryId)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(transaction.note),
+            const SizedBox(height: 12),
+            Text('Amount: ₹${transaction.amount.toStringAsFixed(2)}'),
+            Text('Account: ${provider.accountName(transaction.accountId)}'),
+            Text('Date: ${DateFormat.yMMMd().format(transaction.date)}'),
+            if (transaction.isRecurring) const Text('Recurring transaction'),
+            if (transaction.attachmentPath != null)
+              Text('Attachment: ${transaction.attachmentPath}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Close'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Edit'),
+          ),
+        ],
+      ),
+    );
+    if (shouldEdit == true && context.mounted) {
+      await _editRecord(context, transaction);
+    }
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    LocalTransaction transaction,
+  ) async {
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -430,7 +641,7 @@ class _HomePageState extends State<HomePage> {
     );
     if (shouldDelete != true || !context.mounted) return;
     try {
-      await context.read<ExpenseProvider>().deleteRecord(record);
+      await context.read<ExpenseProvider>().deleteTransaction(transaction);
       if (context.mounted) {
         ScaffoldMessenger.of(
           context,
@@ -445,18 +656,21 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _editRecord(BuildContext context, Record record) async {
+  Future<void> _editRecord(
+    BuildContext context,
+    LocalTransaction transaction,
+  ) async {
     final result = await showDialog<Map<String, String>>(
       context: context,
-      builder: (_) => EditRecordDialog(record: record),
+      builder: (_) => EditRecordDialog(transaction: transaction),
     );
     if (result == null || !context.mounted) return;
     final amount = double.tryParse(result['amount'] ?? '');
     final note = result['note']?.trim() ?? '';
     if (amount == null || amount <= 0 || note.isEmpty) return;
     try {
-      await context.read<ExpenseProvider>().updateRecord(
-        record,
+      await context.read<ExpenseProvider>().updateTransaction(
+        transaction,
         amount: amount,
         note: note,
       );
@@ -520,9 +734,9 @@ class _HomePageState extends State<HomePage> {
 }
 
 class EditRecordDialog extends StatefulWidget {
-  final Record record;
+  final LocalTransaction transaction;
 
-  const EditRecordDialog({super.key, required this.record});
+  const EditRecordDialog({super.key, required this.transaction});
 
   @override
   State<EditRecordDialog> createState() => _EditRecordDialogState();
@@ -536,9 +750,9 @@ class _EditRecordDialogState extends State<EditRecordDialog> {
   void initState() {
     super.initState();
     _amountController = TextEditingController(
-      text: widget.record.amount.toStringAsFixed(2),
+      text: widget.transaction.amount.toStringAsFixed(2),
     );
-    _noteController = TextEditingController(text: widget.record.description);
+    _noteController = TextEditingController(text: widget.transaction.note);
   }
 
   @override

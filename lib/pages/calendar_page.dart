@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:watch_my_wallet/core/utils/category_icons_data.dart';
 import 'package:watch_my_wallet/providers/expense_provider.dart';
-import 'package:watch_my_wallet/record.dart';
+import 'package:watch_my_wallet/data/models/local_entities.dart';
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({super.key});
@@ -22,7 +22,7 @@ class _CalendarPageState extends State<CalendarPage> {
     final expenseProvider = context.watch<ExpenseProvider>();
 
     // 2. Filter records in memory for the selected date
-    final filteredRecords = expenseProvider.records
+    final filteredTransactions = expenseProvider.transactions
         .where(
           (record) =>
               record.date.year == _selectedDate.year &&
@@ -43,13 +43,16 @@ class _CalendarPageState extends State<CalendarPage> {
         elevation: 0,
         foregroundColor: Colors.black,
       ),
-      body: _buildBody(expenseProvider, filteredRecords),
+      body: _buildBody(expenseProvider, filteredTransactions),
     );
   }
 
-  Widget _buildBody(ExpenseProvider provider, List<Record> records) {
+  Widget _buildBody(
+    ExpenseProvider provider,
+    List<LocalTransaction> transactions,
+  ) {
     // 3. Error Boundary
-    if (provider.error != null && provider.records.isEmpty) {
+    if (provider.error != null && provider.transactions.isEmpty) {
       return _buildErrorWidget(provider.error!);
     }
 
@@ -109,7 +112,7 @@ class _CalendarPageState extends State<CalendarPage> {
         ),
 
         // Transactions List
-        if (records.isEmpty)
+        if (transactions.isEmpty)
           SliverFillRemaining(
             hasScrollBody: false,
             child: Center(
@@ -135,8 +138,9 @@ class _CalendarPageState extends State<CalendarPage> {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate((context, index) {
-                final rec = records[index];
-                final isIncome = rec.type == "Income";
+                final rec = transactions[index];
+                final isIncome = rec.type == LocalTransactionType.income;
+                final categoryName = provider.categoryName(rec.categoryId);
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -162,25 +166,25 @@ class _CalendarPageState extends State<CalendarPage> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: categoryIcon
-                              .getCategoryColor(rec.labelText)
+                              .getCategoryColor(categoryName)
                               .withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Icon(
-                          categoryIcon.getCategoryIcon(rec.labelText),
-                          color: categoryIcon.getCategoryColor(rec.labelText),
+                          categoryIcon.getCategoryIcon(categoryName),
+                          color: categoryIcon.getCategoryColor(categoryName),
                           size: 24,
                         ),
                       ),
                       title: Text(
-                        rec.description,
+                        rec.note,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),
                       ),
                       subtitle: Text(
-                        rec.labelText,
+                        categoryName,
                         style: TextStyle(color: Colors.grey[600], fontSize: 13),
                       ),
                       trailing: Text(
@@ -194,7 +198,7 @@ class _CalendarPageState extends State<CalendarPage> {
                     ),
                   ),
                 );
-              }, childCount: records.length),
+              }, childCount: transactions.length),
             ),
           ),
 
@@ -203,7 +207,10 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, Record record) async {
+  Future<void> _confirmDelete(
+    BuildContext context,
+    LocalTransaction transaction,
+  ) async {
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -225,7 +232,7 @@ class _CalendarPageState extends State<CalendarPage> {
     );
     if (shouldDelete != true || !context.mounted) return;
     try {
-      await context.read<ExpenseProvider>().deleteRecord(record);
+      await context.read<ExpenseProvider>().deleteTransaction(transaction);
       if (context.mounted) {
         ScaffoldMessenger.of(
           context,

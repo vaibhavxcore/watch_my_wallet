@@ -3,12 +3,11 @@ import 'package:flutter/material.dart';
 import '../data/local/local_database.dart';
 import '../data/models/local_entities.dart';
 import '../data/repositories/transaction_repository.dart';
-import '../record.dart';
 
 class ExpenseProvider extends ChangeNotifier {
   final TransactionRepository _repository;
 
-  List<Record> _records = [];
+  List<LocalTransaction> _transactions = [];
   final Map<String, LocalTransaction> _localTransactions = {};
   List<LocalAccount> _accounts = [];
   List<LocalCategory> _categories = [];
@@ -19,7 +18,7 @@ class ExpenseProvider extends ChangeNotifier {
   String? _error;
 
   // Getters
-  List<Record> get records => _records;
+  List<LocalTransaction> get transactions => List.unmodifiable(_transactions);
   List<LocalAccount> get accounts => List.unmodifiable(_accounts);
   List<LocalCategory> get categories => List.unmodifiable(_categories);
   double get budget => _budget;
@@ -29,20 +28,20 @@ class ExpenseProvider extends ChangeNotifier {
   String? get error => _error;
 
   // Computed Properties for UI
-  double get totalIncome => _records
-      .where((r) => r.type == "Income")
-      .fold(0.0, (sum, r) => sum + r.amount);
+  double get totalIncome => _transactions
+      .where((transaction) => transaction.type == LocalTransactionType.income)
+      .fold(0.0, (sum, transaction) => sum + transaction.amount);
 
   double get monthlyExpenses {
     final now = DateTime.now();
-    return _records
+    return _transactions
         .where(
-          (r) =>
-              r.type == "Expense" &&
-              r.date.month == now.month &&
-              r.date.year == now.year,
+          (transaction) =>
+              transaction.type == LocalTransactionType.expense &&
+              transaction.date.month == now.month &&
+              transaction.date.year == now.year,
         )
-        .fold(0.0, (sum, r) => sum + r.amount);
+        .fold(0.0, (sum, transaction) => sum + transaction.amount);
   }
 
   double get remainingBudget => _budget - monthlyExpenses;
@@ -53,15 +52,16 @@ class ExpenseProvider extends ChangeNotifier {
   Map<String, double> get categoryBreakdown {
     final now = DateTime.now();
     final breakdown = <String, double>{};
-    final currentMonthExpenses = _records.where(
-      (r) =>
-          r.type == "Expense" &&
-          r.date.month == now.month &&
-          r.date.year == now.year,
+    final currentMonthExpenses = _transactions.where(
+      (transaction) =>
+          transaction.type == LocalTransactionType.expense &&
+          transaction.date.month == now.month &&
+          transaction.date.year == now.year,
     );
 
-    for (var r in currentMonthExpenses) {
-      breakdown[r.labelText] = (breakdown[r.labelText] ?? 0.0) + r.amount;
+    for (final transaction in currentMonthExpenses) {
+      final category = categoryName(transaction.categoryId);
+      breakdown[category] = (breakdown[category] ?? 0.0) + transaction.amount;
     }
     return breakdown;
   }
@@ -87,8 +87,7 @@ class ExpenseProvider extends ChangeNotifier {
       _categories = await _repository.getCategories(
         type: LocalTransactionType.expense,
       );
-      _records = localRecords.map(_toLegacyRecord).toList();
-      _records.sort((a, b) => b.date.compareTo(a.date));
+      _transactions = localRecords;
       _error = null;
     } catch (e) {
       _error = _handleError(e);
@@ -103,29 +102,39 @@ class ExpenseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addRecord(
-    Record record, {
+  Future<void> addTransaction({
     bool toBudget = false,
-    String? accountId,
-    String? categoryId,
+    required String accountId,
+    required String categoryId,
+    required double amount,
+    required LocalTransactionType type,
+    required String note,
+    required DateTime date,
+    String? time,
+    String? attachmentPath,
+    bool isRecurring = false,
   }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      await _repository.create(
+      final transaction = await _repository.create(
         userId: 'guest',
-        accountId: accountId ?? 'account_cash',
-        categoryId: categoryId ?? _categoryId(record),
-        amount: record.amount,
-        type: record.type == 'Income'
-            ? LocalTransactionType.income
-            : LocalTransactionType.expense,
-        note: record.description,
-        date: record.date,
+        accountId: accountId,
+        categoryId: categoryId,
+        amount: amount,
+        type: type,
+        note: note,
+        date: date,
+        time: time,
+        attachmentPath: attachmentPath,
+        isRecurring: isRecurring,
       );
-      await initialize();
+      _localTransactions[transaction.id] = transaction;
+      _transactions = [..._transactions, transaction]
+        ..sort((a, b) => b.date.compareTo(a.date));
+      notifyListeners();
     } catch (e) {
       _error = _handleError(e);
       rethrow;
@@ -141,18 +150,22 @@ class ExpenseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> deleteRecord(Record record) async {
-    final id = record.id;
-    if (id == null) return;
-    final transaction = _localTransactions[id] ?? await _repository.getById(id);
-    if (transaction == null) return;
+  Future<LocalTransaction?> deleteTransaction(
+    LocalTransaction transaction,
+  ) async {
+    final id = transaction.id;
+    final existing = _localTransactions[id] ?? await _repository.getById(id);
+    if (existing == null) return null;
 
     _isLoading = true;
     _error = null;
     notifyListeners();
     try {
-      await _repository.softDelete(transaction);
-      await initialize();
+      await _repository.softDelete(existing);
+      _localTransactions.remove(id);
+      _transactions = _transactions.where((item) => item.id != id).toList();
+      notifyListeners();
+      return existing;
     } catch (e) {
       _error = _handleError(e);
       rethrow;
@@ -162,38 +175,52 @@ class ExpenseProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> updateRecord(
-    Record record, {
-    required double amount,
-    required String note,
+  Future<void> restoreTransaction(LocalTransaction transaction) async {
+    final restored = await _repository.update(
+      transaction.copyWith(deletedAt: null),
+    );
+    _localTransactions[restored.id] = restored;
+    _transactions = [..._transactions, restored]
+      ..sort((a, b) => b.date.compareTo(a.date));
+    notifyListeners();
+  }
+
+  Future<void> updateTransaction(
+    LocalTransaction transaction, {
+    double? amount,
+    String? note,
+    DateTime? date,
   }) async {
-    final id = record.id;
-    if (id == null) return;
-    final transaction = _localTransactions[id] ?? await _repository.getById(id);
-    if (transaction == null) return;
+    final existing =
+        _localTransactions[transaction.id] ??
+        await _repository.getById(transaction.id);
+    if (existing == null) return;
 
     try {
       final updated = await _repository.update(
         LocalTransaction(
-          id: transaction.id,
-          userId: transaction.userId,
-          accountId: transaction.accountId,
-          categoryId: transaction.categoryId,
-          amount: amount,
-          type: transaction.type,
-          note: note,
-          date: transaction.date,
-          createdAt: transaction.createdAt,
-          updatedAt: transaction.updatedAt,
-          deletedAt: transaction.deletedAt,
-          syncStatus: transaction.syncStatus,
+          id: existing.id,
+          userId: existing.userId,
+          accountId: existing.accountId,
+          categoryId: existing.categoryId,
+          amount: amount ?? existing.amount,
+          type: existing.type,
+          note: note ?? existing.note,
+          date: date ?? existing.date,
+          time: existing.time,
+          attachmentPath: existing.attachmentPath,
+          isRecurring: existing.isRecurring,
+          createdAt: existing.createdAt,
+          updatedAt: existing.updatedAt,
+          deletedAt: existing.deletedAt,
+          syncStatus: existing.syncStatus,
         ),
       );
       _localTransactions[updated.id] = updated;
-      final index = _records.indexWhere((item) => item.id == updated.id);
+      final index = _transactions.indexWhere((item) => item.id == updated.id);
       if (index != -1) {
-        _records[index] = _toLegacyRecord(updated);
-        _records.sort((a, b) => b.date.compareTo(a.date));
+        _transactions[index] = updated;
+        _transactions.sort((a, b) => b.date.compareTo(a.date));
       }
       _error = null;
       notifyListeners();
@@ -203,39 +230,18 @@ class ExpenseProvider extends ChangeNotifier {
     }
   }
 
-  String _categoryId(Record record) {
-    final type = record.type == 'Income' ? 'income' : 'expense';
-    final label = record.labelText.toLowerCase() == 'others'
-        ? 'other'
-        : record.labelText.toLowerCase();
-    return 'category_${type}_$label';
+  String categoryName(String categoryId) {
+    for (final category in _categories) {
+      if (category.id == categoryId) return category.name;
+    }
+    return 'Other';
   }
 
-  Record _toLegacyRecord(LocalTransaction transaction) {
-    final type = transaction.type == LocalTransactionType.income
-        ? 'Income'
-        : 'Expense';
-    final category = transaction.categoryId.split('_').skip(2).join('_');
-    return Record(
-      id: transaction.id,
-      uid: transaction.userId,
-      description: transaction.note,
-      labelText: category.isEmpty ? 'Other' : _titleCase(category),
-      amount: transaction.amount,
-      type: type,
-      date: transaction.date.toLocal(),
-    );
-  }
-
-  String _titleCase(String value) {
-    return value
-        .split('_')
-        .map(
-          (word) => word.isEmpty
-              ? word
-              : '${word[0].toUpperCase()}${word.substring(1)}',
-        )
-        .join(' ');
+  String accountName(String accountId) {
+    for (final account in _accounts) {
+      if (account.id == accountId) return account.name;
+    }
+    return 'Unknown account';
   }
 
   String _handleError(dynamic e) {

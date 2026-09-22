@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:watch_my_wallet/providers/expense_provider.dart';
-import 'package:watch_my_wallet/record.dart';
 import 'package:watch_my_wallet/data/models/local_entities.dart';
 
 import '../core/utils/category_icons_data.dart';
@@ -21,6 +20,7 @@ enum RecordType { income, expense }
 class _AddRecordState extends State<AddRecord> {
   final TextEditingController descriptionController = TextEditingController();
   final TextEditingController amountController = TextEditingController();
+  final TextEditingController attachmentController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   final ValueNotifier<String?> labelValueListenable = ValueNotifier<String?>(
@@ -31,6 +31,8 @@ class _AddRecordState extends State<AddRecord> {
   String _selectedAccountId = 'account_cash';
   String? _selectedCategoryId;
   DateTime _selectedDate = DateTime.now();
+  TimeOfDay? _selectedTime;
+  bool _isRecurring = false;
   final categoryIcons = CategoryIconsData();
 
   @override
@@ -38,6 +40,7 @@ class _AddRecordState extends State<AddRecord> {
     labelValueListenable.dispose();
     descriptionController.dispose();
     amountController.dispose();
+    attachmentController.dispose();
     super.dispose();
   }
 
@@ -88,26 +91,25 @@ class _AddRecordState extends State<AddRecord> {
 
     try {
       final amount = double.parse(amountController.text);
-      final newRecord = Record(
-        type: _selectedType == RecordType.income ? "Income" : "Expense",
-        description: descriptionController.text,
-        amount: amount,
-        labelText: labelValueListenable.value.toString(),
-        date: _selectedDate,
-      );
-
       if (_selectedType == RecordType.income) {
         _showIncomeDialog(
-          newRecord,
           amount,
           accountId: _selectedAccountId,
           categoryId: _selectedCategoryId,
         );
       } else {
-        await expenseProvider.addRecord(
-          newRecord,
+        await expenseProvider.addTransaction(
+          amount: amount,
+          type: LocalTransactionType.expense,
+          note: descriptionController.text,
+          date: _selectedDate,
+          time: _selectedTime?.format(context),
+          attachmentPath: attachmentController.text.trim().isEmpty
+              ? null
+              : attachmentController.text.trim(),
+          isRecurring: _isRecurring,
           accountId: _selectedAccountId,
-          categoryId: _selectedCategoryId,
+          categoryId: _selectedCategoryId!,
         );
         if (expenseProvider.error != null) {
           _showErrorSnackBar(expenseProvider.error!);
@@ -121,7 +123,6 @@ class _AddRecordState extends State<AddRecord> {
   }
 
   void _showIncomeDialog(
-    Record record,
     double amount, {
     required String accountId,
     required String? categoryId,
@@ -143,11 +144,18 @@ class _AddRecordState extends State<AddRecord> {
             onPressed: () async {
               final expenseProvider = this.context.read<ExpenseProvider>();
               Navigator.pop(context);
-              await expenseProvider.addRecord(
-                record,
-                toBudget: false,
+              await expenseProvider.addTransaction(
+                amount: amount,
+                type: LocalTransactionType.income,
+                note: descriptionController.text,
+                date: _selectedDate,
+                time: _selectedTime?.format(this.context),
+                attachmentPath: attachmentController.text.trim().isEmpty
+                    ? null
+                    : attachmentController.text.trim(),
+                isRecurring: _isRecurring,
                 accountId: accountId,
-                categoryId: categoryId,
+                categoryId: categoryId!,
               );
               if (expenseProvider.error != null) {
                 _showErrorSnackBar(expenseProvider.error!);
@@ -164,11 +172,18 @@ class _AddRecordState extends State<AddRecord> {
             onPressed: () async {
               final expenseProvider = this.context.read<ExpenseProvider>();
               Navigator.pop(context);
-              await expenseProvider.addRecord(
-                record,
-                toBudget: true,
+              await expenseProvider.addTransaction(
+                amount: amount,
+                type: LocalTransactionType.income,
+                note: descriptionController.text,
+                date: _selectedDate,
+                time: _selectedTime?.format(this.context),
+                attachmentPath: attachmentController.text.trim().isEmpty
+                    ? null
+                    : attachmentController.text.trim(),
+                isRecurring: _isRecurring,
                 accountId: accountId,
-                categoryId: categoryId,
+                categoryId: categoryId!,
               );
               if (expenseProvider.error != null) {
                 _showErrorSnackBar(expenseProvider.error!);
@@ -408,6 +423,52 @@ class _AddRecordState extends State<AddRecord> {
                           const Spacer(),
                           const Icon(Icons.arrow_drop_down, color: Colors.grey),
                         ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final picked = await showTimePicker(
+                              context: context,
+                              initialTime: _selectedTime ?? TimeOfDay.now(),
+                            );
+                            if (picked != null && mounted) {
+                              setState(() => _selectedTime = picked);
+                            }
+                          },
+                          icon: const Icon(Icons.schedule),
+                          label: Text(
+                            _selectedTime?.format(context) ?? 'Add time',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Recurring'),
+                          value: _isRecurring,
+                          onChanged: (value) =>
+                              setState(() => _isRecurring = value),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: attachmentController,
+                    decoration: InputDecoration(
+                      labelText: 'Attachment path (optional)',
+                      prefixIcon: const Icon(Icons.attach_file),
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
                       ),
                     ),
                   ),

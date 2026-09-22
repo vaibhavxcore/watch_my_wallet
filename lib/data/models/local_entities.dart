@@ -69,6 +69,9 @@ class LocalTransaction {
   final LocalTransactionType type;
   final String note;
   final DateTime date;
+  final String? time;
+  final String? attachmentPath;
+  final bool isRecurring;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
@@ -83,6 +86,9 @@ class LocalTransaction {
     required this.type,
     required this.note,
     required this.date,
+    this.time,
+    this.attachmentPath,
+    this.isRecurring = false,
     required this.createdAt,
     required this.updatedAt,
     required this.syncStatus,
@@ -99,6 +105,9 @@ class LocalTransaction {
       'type': type.name,
       'note': note,
       'transaction_date': date.toUtc().toIso8601String(),
+      'time': time,
+      'attachment_path': attachmentPath,
+      'is_recurring': isRecurring ? 1 : 0,
       'created_at': createdAt.toUtc().toIso8601String(),
       'updated_at': updatedAt.toUtc().toIso8601String(),
       'deleted_at': deletedAt?.toUtc().toIso8601String(),
@@ -116,10 +125,49 @@ class LocalTransaction {
       type: _transactionType(map['type']! as String),
       note: map['note']! as String,
       date: DateTime.parse(map['transaction_date']! as String),
+      time: map['time'] as String?,
+      attachmentPath: map['attachment_path'] as String?,
+      isRecurring: (map['is_recurring'] as int? ?? 0) == 1,
       createdAt: DateTime.parse(map['created_at']! as String),
       updatedAt: DateTime.parse(map['updated_at']! as String),
       deletedAt: _dateOrNull(map['deleted_at']),
       syncStatus: _syncStatus(map['sync_status']! as String),
+    );
+  }
+
+  LocalTransaction copyWith({
+    String? id,
+    String? userId,
+    String? accountId,
+    String? categoryId,
+    double? amount,
+    LocalTransactionType? type,
+    String? note,
+    DateTime? date,
+    String? time,
+    String? attachmentPath,
+    bool? isRecurring,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    DateTime? deletedAt,
+    SyncStatus? syncStatus,
+  }) {
+    return LocalTransaction(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      accountId: accountId ?? this.accountId,
+      categoryId: categoryId ?? this.categoryId,
+      amount: amount ?? this.amount,
+      type: type ?? this.type,
+      note: note ?? this.note,
+      date: date ?? this.date,
+      time: time ?? this.time,
+      attachmentPath: attachmentPath ?? this.attachmentPath,
+      isRecurring: isRecurring ?? this.isRecurring,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt,
+      syncStatus: syncStatus ?? this.syncStatus,
     );
   }
 }
