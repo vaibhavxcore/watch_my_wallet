@@ -1,9 +1,11 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:watch_my_wallet/core/utils/category_icons_data.dart';
-import 'package:watch_my_wallet/record.dart';
-import 'package:watch_my_wallet/record_database.dart';
+import 'package:watch_my_wallet/core/utils/insight_metrics.dart';
+import 'package:watch_my_wallet/data/models/local_entities.dart';
+import 'package:watch_my_wallet/providers/expense_provider.dart';
 
 class InsightsPage extends StatefulWidget {
   const InsightsPage({super.key});
@@ -13,17 +15,19 @@ class InsightsPage extends StatefulWidget {
 }
 
 class _InsightsPageState extends State<InsightsPage> {
-  final recordDB = RecordDatabase();
-  final categoryData = CategoryIconsData();
-  int touchedIndex = -1;
+  final _categoryData = CategoryIconsData();
+  InsightRange _range = InsightRange.month;
+  int _touchedIndex = -1;
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<ExpenseProvider>();
+    final transactions = InsightMetrics.forRange(provider.transactions, _range);
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FB),
       appBar: AppBar(
         title: const Text(
-          "Insights",
+          'Insights',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
@@ -31,159 +35,115 @@ class _InsightsPageState extends State<InsightsPage> {
         elevation: 0,
         foregroundColor: Colors.black,
       ),
-      body: StreamBuilder<List<Record>>(
-        stream: recordDB.stream,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}"));
-          }
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator.adaptive());
-          }
-
-          final records = snapshot.data!;
-          if (records.isEmpty) {
-            return Center(
+      body: provider.isLoading && provider.transactions.isEmpty
+          ? const Center(child: CircularProgressIndicator.adaptive())
+          : SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.all(20),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.analytics_outlined,
-                    size: 80,
-                    color: Colors.grey.shade300,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    "Not enough data for insights yet.",
-                    style: TextStyle(color: Colors.grey),
-                  ),
+                  _rangeSelector(),
+                  const SizedBox(height: 28),
+                  _header('Expense Breakdown', _rangeLabel),
+                  const SizedBox(height: 20),
+                  _categoryChart(transactions, provider.categoryName),
+                  const SizedBox(height: 40),
+                  _header('Financial Trend', _rangeLabel),
+                  const SizedBox(height: 20),
+                  _trendChart(transactions),
+                  const SizedBox(height: 100),
                 ],
               ),
-            );
-          }
-
-          return SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildSectionHeader("Expense Breakdown", "Current Month"),
-                const SizedBox(height: 20),
-                _buildCategoryChart(records),
-                const SizedBox(height: 40),
-                _buildSectionHeader("Financial Trend", "Last 6 Months"),
-                const SizedBox(height: 20),
-                _buildTrendChart(records),
-                const SizedBox(height: 100),
-              ],
             ),
-          );
-        },
-      ),
     );
   }
 
-  Widget _buildSectionHeader(String title, String subtitle) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w900,
-            color: Color(0xFF1A1C1E),
-          ),
+  String get _rangeLabel => switch (_range) {
+    InsightRange.week => 'This week',
+    InsightRange.month => 'This month',
+    InsightRange.threeMonths => 'Last 3 months',
+    InsightRange.year => 'This year',
+  };
+
+  Widget _rangeSelector() => SegmentedButton<InsightRange>(
+    showSelectedIcon: false,
+    segments: const [
+      ButtonSegment(value: InsightRange.week, label: Text('Week')),
+      ButtonSegment(value: InsightRange.month, label: Text('Month')),
+      ButtonSegment(value: InsightRange.threeMonths, label: Text('3 Months')),
+      ButtonSegment(value: InsightRange.year, label: Text('Year')),
+    ],
+    selected: {_range},
+    onSelectionChanged: (value) => setState(() {
+      _range = value.first;
+      _touchedIndex = -1;
+    }),
+  );
+
+  Widget _header(String title, String subtitle) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        title,
+        style: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w900,
+          color: Color(0xFF1A1C1E),
         ),
-        Text(
-          subtitle,
-          style: TextStyle(
-            fontSize: 13,
-            color: Colors.grey.shade500,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCategoryChart(List<Record> records) {
-    final now = DateTime.now();
-    final currentMonthExpenses = records
-        .where(
-          (r) =>
-              r.type == "Expense" &&
-              r.date.month == now.month &&
-              r.date.year == now.year,
-        )
-        .toList();
-
-    if (currentMonthExpenses.isEmpty) {
-      return _buildEmptyState("No expenses recorded this month");
-    }
-
-    Map<String, double> categoryMap = {};
-    double total = 0;
-    for (var rec in currentMonthExpenses) {
-      categoryMap[rec.labelText] =
-          (categoryMap[rec.labelText] ?? 0) + rec.amount;
-      total += rec.amount;
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(35),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
       ),
-      child: Column(
+      Text(
+        subtitle,
+        style: TextStyle(
+          fontSize: 13,
+          color: Colors.grey.shade500,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ],
+  );
+
+  Widget _categoryChart(
+    List<LocalTransaction> transactions,
+    String Function(String) categoryName,
+  ) {
+    final totals = InsightMetrics.expenseByCategory(transactions, categoryName);
+    if (totals.isEmpty) return _empty('No expenses recorded in this period');
+    final entries = totals.entries.toList();
+    final total = totals.values.fold(0.0, (sum, amount) => sum + amount);
+    return _card(
+      Column(
         children: [
           SizedBox(
             height: 220,
             child: PieChart(
               PieChartData(
                 pieTouchData: PieTouchData(
-                  touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                    setState(() {
-                      if (!event.isInterestedForInteractions ||
-                          pieTouchResponse == null ||
-                          pieTouchResponse.touchedSection == null) {
-                        touchedIndex = -1;
-                        return;
-                      }
-                      touchedIndex =
-                          pieTouchResponse.touchedSection!.touchedSectionIndex;
-                    });
-                  },
+                  touchCallback: (event, response) => setState(() {
+                    _touchedIndex =
+                        event.isInterestedForInteractions &&
+                            response?.touchedSection != null
+                        ? response!.touchedSection!.touchedSectionIndex
+                        : -1;
+                  }),
                 ),
                 borderData: FlBorderData(show: false),
                 sectionsSpace: 4,
                 centerSpaceRadius: 55,
-                sections: categoryMap.entries.map((entry) {
-                  final index = categoryMap.keys.toList().indexOf(entry.key);
-                  final isTouched = index == touchedIndex;
-                  final radius = isTouched ? 65.0 : 55.0;
-
+                sections: List.generate(entries.length, (index) {
+                  final entry = entries[index];
                   return PieChartSectionData(
-                    color: categoryData.getCategoryColor(entry.key),
+                    color: _categoryData.getCategoryColor(entry.key),
                     value: entry.value,
                     title: '${(entry.value / total * 100).toStringAsFixed(0)}%',
-                    radius: radius,
+                    radius: index == _touchedIndex ? 65 : 55,
                     titleStyle: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
                   );
-                }).toList(),
+                }),
               ),
             ),
           ),
@@ -192,190 +152,172 @@ class _InsightsPageState extends State<InsightsPage> {
             spacing: 12,
             runSpacing: 12,
             alignment: WrapAlignment.center,
-            children: categoryMap.entries.map((entry) {
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: categoryData.getCategoryColor(entry.key),
-                      shape: BoxShape.circle,
-                    ),
+            children: entries
+                .map(
+                  (entry) => Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: _categoryData.getCategoryColor(entry.key),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        entry.key,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2D3243),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    entry.key,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF2D3243),
-                    ),
-                  ),
-                ],
-              );
-            }).toList(),
+                )
+                .toList(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTrendChart(List<Record> records) {
-    final now = DateTime.now();
-    List<DateTime> months = List.generate(
-      6,
-      (i) => DateTime(now.year, now.month - (5 - i), 1),
-    );
-
-    return Container(
+  Widget _trendChart(List<LocalTransaction> transactions) {
+    if (transactions.isEmpty) {
+      return _empty('No transactions recorded in this period');
+    }
+    final points = InsightMetrics.trendPoints(_range);
+    final values = [
+      for (final point in points) ...[
+        InsightMetrics.totalFor(
+          transactions,
+          point,
+          LocalTransactionType.income,
+        ),
+        InsightMetrics.totalFor(
+          transactions,
+          point,
+          LocalTransactionType.expense,
+        ),
+      ],
+    ];
+    final peak = values.fold(0.0, (max, value) => value > max ? value : max);
+    final labelStep = _range == InsightRange.month ? 5 : 1;
+    return SizedBox(
       height: 330,
-      padding: const EdgeInsets.fromLTRB(10, 30, 20, 15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(35),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: BarChart(
-        BarChartData(
-          alignment: BarChartAlignment.spaceAround,
-          maxY: _getMaxY(records, months),
-          barTouchData: BarTouchData(
-            enabled: true,
-            touchTooltipData: BarTouchTooltipData(
-              getTooltipColor: (group) => Colors.black.withValues(alpha: 0.8),
-              getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                return BarTooltipItem(
+      child: _card(
+        BarChart(
+          BarChartData(
+            alignment: BarChartAlignment.spaceAround,
+            maxY: peak == 0 ? 1000 : peak * 1.2,
+            barTouchData: BarTouchData(
+              touchTooltipData: BarTouchTooltipData(
+                getTooltipColor: (_) => Colors.black.withValues(alpha: 0.8),
+                getTooltipItem: (_, _, rod, _) => BarTooltipItem(
                   '₹${NumberFormat.compact().format(rod.toY)}',
                   const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
-                );
-              },
-            ),
-          ),
-          titlesData: FlTitlesData(
-            show: true,
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                getTitlesWidget: (value, meta) {
-                  int index = value.toInt();
-                  if (index >= 0 && index < months.length) {
-                    return Text(
-                      DateFormat('MMM').format(months[index]),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade700,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    );
-                  }
-                  return const Text('');
-                },
+                ),
               ),
             ),
-            leftTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
+            titlesData: FlTitlesData(
+              leftTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+              topTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+              rightTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  getTitlesWidget: (value, _) {
+                    final index = value.toInt();
+                    if (index < 0 ||
+                        index >= points.length ||
+                        index % labelStep != 0) {
+                      return const SizedBox.shrink();
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        points[index].label,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade700,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
-            topTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            rightTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
+            gridData: const FlGridData(show: false),
+            borderData: FlBorderData(show: false),
+            barGroups: List.generate(
+              points.length,
+              (index) => BarChartGroupData(
+                x: index,
+                barRods: [
+                  BarChartRodData(
+                    toY: InsightMetrics.totalFor(
+                      transactions,
+                      points[index],
+                      LocalTransactionType.income,
+                    ),
+                    color: const Color(0xFF2E7D32),
+                    width: 8,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  BarChartRodData(
+                    toY: InsightMetrics.totalFor(
+                      transactions,
+                      points[index],
+                      LocalTransactionType.expense,
+                    ),
+                    color: const Color(0xFFC62828),
+                    width: 8,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ],
+              ),
             ),
           ),
-          gridData: const FlGridData(show: false),
-          borderData: FlBorderData(show: false),
-          barGroups: months.asMap().entries.map((entry) {
-            int index = entry.key;
-            DateTime month = entry.value;
-
-            double income = records
-                .where(
-                  (r) =>
-                      r.type == "Income" &&
-                      r.date.month == month.month &&
-                      r.date.year == month.year,
-                )
-                .fold(0, (sum, r) => sum + r.amount);
-
-            double expense = records
-                .where(
-                  (r) =>
-                      r.type == "Expense" &&
-                      r.date.month == month.month &&
-                      r.date.year == month.year,
-                )
-                .fold(0, (sum, r) => sum + r.amount);
-
-            return BarChartGroupData(
-              x: index,
-              barRods: [
-                BarChartRodData(
-                  toY: income,
-                  color: const Color(0xFF2E7D32),
-                  width: 8,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                BarChartRodData(
-                  toY: expense,
-                  color: const Color(0xFFC62828),
-                  width: 8,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ],
-            );
-          }).toList(),
         ),
       ),
     );
   }
 
-  Widget _buildEmptyState(String message) {
-    return Container(
+  Widget _empty(String message) => _card(
+    SizedBox(
       height: 200,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(35),
-      ),
       child: Center(
         child: Text(message, style: const TextStyle(color: Colors.grey)),
       ),
-    );
-  }
+    ),
+  );
 
-  double _getMaxY(List<Record> records, List<DateTime> months) {
-    double maxVal = 0;
-    for (var month in months) {
-      double inc = records
-          .where(
-            (r) =>
-                r.type == "Income" &&
-                r.date.month == month.month &&
-                r.date.year == month.year,
-          )
-          .fold(0, (sum, r) => sum + r.amount);
-      double exp = records
-          .where(
-            (r) =>
-                r.type == "Expense" &&
-                r.date.month == month.month &&
-                r.date.year == month.year,
-          )
-          .fold(0, (sum, r) => sum + r.amount);
-      if (inc > maxVal) maxVal = inc;
-      if (exp > maxVal) maxVal = exp;
-    }
-    return maxVal == 0 ? 1000 : maxVal * 1.2;
-  }
+  Widget _card(Widget child) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(24),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(35),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.03),
+          blurRadius: 20,
+          offset: const Offset(0, 10),
+        ),
+      ],
+    ),
+    child: child,
+  );
 }

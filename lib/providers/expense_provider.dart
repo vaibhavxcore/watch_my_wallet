@@ -11,6 +11,7 @@ class ExpenseProvider extends ChangeNotifier {
   final Map<String, LocalTransaction> _localTransactions = {};
   List<LocalAccount> _accounts = [];
   List<LocalCategory> _categories = [];
+  final Map<String, String> _categoryNames = {};
   double _budget = 0.0;
   final double _extraIncome = 0.0;
   double _defaultBudget = 0.0;
@@ -123,6 +124,10 @@ class ExpenseProvider extends ChangeNotifier {
       _categories = await _repository.getCategories(
         type: LocalTransactionType.expense,
       );
+      _rememberCategoryNames(_categories);
+      _rememberCategoryNames(
+        await _repository.getCategories(type: LocalTransactionType.income),
+      );
       final budget = await _repository.getBudget();
       _budget = budget?.amount ?? 0;
       _defaultBudget = _budget;
@@ -149,6 +154,7 @@ class ExpenseProvider extends ChangeNotifier {
 
   Future<void> loadCategories(LocalTransactionType type) async {
     _categories = await _repository.getCategories(type: type);
+    _rememberCategoryNames(_categories);
     notifyListeners();
   }
 
@@ -215,6 +221,7 @@ class ExpenseProvider extends ChangeNotifier {
 
   Future<void> addCategory(String name, LocalTransactionType type) async {
     final category = await _repository.createCategory(name: name, type: type);
+    _categoryNames[category.id] = category.name;
     if (category.type == LocalTransactionType.expense) {
       _categories = [..._categories, category]
         ..sort((a, b) => a.name.compareTo(b.name));
@@ -355,10 +362,13 @@ class ExpenseProvider extends ChangeNotifier {
   }
 
   String categoryName(String categoryId) {
-    for (final category in _categories) {
-      if (category.id == categoryId) return category.name;
+    return _categoryNames[categoryId] ?? 'Other';
+  }
+
+  void _rememberCategoryNames(Iterable<LocalCategory> categories) {
+    for (final category in categories) {
+      _categoryNames[category.id] = category.name;
     }
-    return 'Other';
   }
 
   String accountName(String accountId) {

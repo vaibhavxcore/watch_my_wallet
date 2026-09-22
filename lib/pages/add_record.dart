@@ -37,6 +37,18 @@ class _AddRecordState extends State<AddRecord> {
   final categoryIcons = CategoryIconsData();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<ExpenseProvider>().loadCategories(
+          LocalTransactionType.expense,
+        );
+      }
+    });
+  }
+
+  @override
   void dispose() {
     labelValueListenable.dispose();
     descriptionController.dispose();
@@ -260,14 +272,14 @@ class _AddRecordState extends State<AddRecord> {
                         ),
                       ],
                       selected: {_selectedType},
-                      onSelectionChanged: (val) {
+                      onSelectionChanged: (val) async {
                         final selectedType = val.first;
                         labelValueListenable.value = null;
                         _selectedCategoryId = null;
                         setState(() {
                           _selectedType = selectedType;
                         });
-                        expenseProvider.loadCategories(
+                        await expenseProvider.loadCategories(
                           selectedType == RecordType.income
                               ? LocalTransactionType.income
                               : LocalTransactionType.expense,
