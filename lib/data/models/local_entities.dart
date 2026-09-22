@@ -172,6 +172,101 @@ class LocalTransaction {
   }
 }
 
+class LocalBudget {
+  final String id;
+  final String userId;
+  final double amount;
+  final String month;
+
+  const LocalBudget({
+    required this.id,
+    required this.userId,
+    required this.amount,
+    required this.month,
+  });
+
+  factory LocalBudget.fromMap(Map<String, Object?> map) {
+    return LocalBudget(
+      id: map['id']! as String,
+      userId: map['user_id']! as String,
+      amount: (map['amount']! as num).toDouble(),
+      month: map['month']! as String,
+    );
+  }
+}
+
+class LocalCategoryBudget {
+  final String id;
+  final String categoryId;
+  final double amount;
+  final String month;
+
+  const LocalCategoryBudget({
+    required this.id,
+    required this.categoryId,
+    required this.amount,
+    required this.month,
+  });
+
+  factory LocalCategoryBudget.fromMap(Map<String, Object?> map) {
+    return LocalCategoryBudget(
+      id: map['id']! as String,
+      categoryId: map['category_id']! as String,
+      amount: (map['amount']! as num).toDouble(),
+      month: map['month']! as String,
+    );
+  }
+}
+
+class LocalSavingsGoal {
+  final String id;
+  final String name;
+  final double targetAmount;
+  final double currentAmount;
+  final DateTime? targetDate;
+
+  const LocalSavingsGoal({
+    required this.id,
+    required this.name,
+    required this.targetAmount,
+    required this.currentAmount,
+    this.targetDate,
+  });
+
+  factory LocalSavingsGoal.fromMap(Map<String, Object?> map) {
+    return LocalSavingsGoal(
+      id: map['id']! as String,
+      name: map['name']! as String,
+      targetAmount: (map['target_amount']! as num).toDouble(),
+      currentAmount: (map['current_amount']! as num).toDouble(),
+      targetDate: _dateOrNull(map['target_date']),
+    );
+  }
+}
+
+class LocalRecurringTransaction {
+  final String id;
+  final String transactionId;
+  final String frequency;
+  final DateTime nextOccurrence;
+
+  const LocalRecurringTransaction({
+    required this.id,
+    required this.transactionId,
+    required this.frequency,
+    required this.nextOccurrence,
+  });
+
+  factory LocalRecurringTransaction.fromMap(Map<String, Object?> map) {
+    return LocalRecurringTransaction(
+      id: map['id']! as String,
+      transactionId: map['transaction_id']! as String,
+      frequency: map['frequency']! as String,
+      nextOccurrence: DateTime.parse(map['next_occurrence']! as String),
+    );
+  }
+}
+
 DateTime? _dateOrNull(Object? value) {
   return value == null ? null : DateTime.parse(value as String);
 }

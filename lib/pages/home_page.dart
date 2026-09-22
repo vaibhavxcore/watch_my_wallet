@@ -286,6 +286,42 @@ class _HomePageState extends State<HomePage> {
 
           const SliverToBoxAdapter(child: SizedBox(height: 150)),
 
+          if (expenseProvider.isBudgetWarning ||
+              expenseProvider.categoryBudgetWarnings.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: Colors.orange.shade800,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          expenseProvider.categoryBudgetWarnings.isNotEmpty
+                              ? 'Budget warning: ${expenseProvider.categoryBudgetWarnings.length} category budget(s) reached.'
+                              : 'Budget warning: you reached your monthly budget threshold.',
+                          style: TextStyle(
+                            color: Colors.orange.shade900,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
           // Recent Activity Section
           SliverToBoxAdapter(
             child: Padding(

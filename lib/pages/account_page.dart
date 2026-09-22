@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:watch_my_wallet/providers/auth_provider.dart';
 import 'package:watch_my_wallet/providers/expense_provider.dart';
+import 'package:watch_my_wallet/data/models/local_entities.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
@@ -13,10 +14,14 @@ class AccountPage extends StatefulWidget {
 
 class _AccountPageState extends State<AccountPage> {
   final _budgetController = TextEditingController();
+  final _nameController = TextEditingController();
+  final _amountController = TextEditingController();
 
   @override
   void dispose() {
     _budgetController.dispose();
+    _nameController.dispose();
+    _amountController.dispose();
     super.dispose();
   }
 
@@ -139,6 +144,212 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
+  Future<void> _showAmountDialog({
+    required String title,
+    required String hint,
+    required Future<void> Function(double amount) onSave,
+  }) async {
+    _amountController.clear();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: _amountController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(labelText: hint),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final amount = double.tryParse(_amountController.text);
+              if (amount == null || amount < 0) return;
+              await onSave(amount);
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showCategoryDialog() async {
+    _nameController.clear();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('New expense category'),
+        content: TextField(
+          controller: _nameController,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Category name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (_nameController.text.trim().isEmpty) return;
+              await context.read<ExpenseProvider>().addCategory(
+                _nameController.text,
+                LocalTransactionType.expense,
+              );
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showSavingsGoalDialog() async {
+    _nameController.clear();
+    _amountController.clear();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Savings goal'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Goal name'),
+            ),
+            TextField(
+              controller: _amountController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(labelText: 'Target amount'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final amount = double.tryParse(_amountController.text);
+              if (_nameController.text.trim().isEmpty ||
+                  amount == null ||
+                  amount <= 0) {
+                return;
+              }
+              await context.read<ExpenseProvider>().addSavingsGoal(
+                name: _nameController.text,
+                targetAmount: amount,
+              );
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showGoalContributionDialog(
+    ExpenseProvider provider,
+    LocalSavingsGoal goal,
+  ) async {
+    _amountController.clear();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Add money to ${goal.name}'),
+        content: TextField(
+          controller: _amountController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+            labelText:
+                'Remaining: ₹${NumberFormat('#,##,###.##').format(goal.targetAmount - goal.currentAmount)}',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final amount = double.tryParse(_amountController.text);
+              if (amount == null || amount <= 0) return;
+              await provider.addSavingsGoalAmount(goal, amount);
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+            },
+            child: const Text('Add money'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showCategoryBudgetDialog(ExpenseProvider provider) async {
+    String? categoryId = provider.categories.isEmpty
+        ? null
+        : provider.categories.first.id;
+    _amountController.clear();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Category budget'),
+        content: StatefulBuilder(
+          builder: (context, setDialogState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: categoryId,
+                items: provider.categories
+                    .map(
+                      (category) => DropdownMenuItem<String>(
+                        value: category.id,
+                        child: Text(category.name),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setDialogState(() => categoryId = value),
+                decoration: const InputDecoration(labelText: 'Category'),
+              ),
+              TextField(
+                controller: _amountController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(labelText: 'Monthly amount'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final amount = double.tryParse(_amountController.text);
+              if (categoryId == null || amount == null || amount < 0) return;
+              await provider.updateCategoryBudget(categoryId!, amount);
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
@@ -249,6 +460,146 @@ class _AccountPageState extends State<AccountPage> {
                     ),
                   ),
                 ),
+
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
+                    child: Column(
+                      children: [
+                        _buildSettingItem(
+                          icon: Icons.category_outlined,
+                          title: 'Add custom category',
+                          trailing: '',
+                          color: Colors.teal,
+                          onTap: _showCategoryDialog,
+                        ),
+                        _buildSettingItem(
+                          icon: Icons.savings_outlined,
+                          title: 'Add savings goal',
+                          trailing: '${expenseProvider.savingsGoals.length}',
+                          color: Colors.green,
+                          onTap: _showSavingsGoalDialog,
+                        ),
+                        _buildSettingItem(
+                          icon: Icons.pie_chart_outline,
+                          title: 'Category budgets',
+                          trailing: '${expenseProvider.categoryBudgets.length}',
+                          color: Colors.deepOrange,
+                          onTap: () =>
+                              _showCategoryBudgetDialog(expenseProvider),
+                        ),
+                        _buildSettingItem(
+                          icon: Icons.account_balance_wallet_outlined,
+                          title: 'Account balances',
+                          trailing: '${expenseProvider.accountBalances.length}',
+                          color: Colors.indigo,
+                          onTap: () => _showBalances(expenseProvider),
+                        ),
+                        _buildSettingItem(
+                          icon: Icons.tune,
+                          title: 'Budget warning',
+                          trailing:
+                              '${(expenseProvider.budgetWarningThreshold * 100).round()}%',
+                          color: Colors.orange,
+                          onTap: () => _showAmountDialog(
+                            title: 'Warning threshold',
+                            hint: 'Percent (50-100)',
+                            onSave: (amount) => expenseProvider
+                                .setBudgetWarningThreshold(amount / 100),
+                          ),
+                        ),
+                        SwitchListTile.adaptive(
+                          title: const Text('Dark theme'),
+                          value: expenseProvider.isDarkMode,
+                          onChanged: expenseProvider.setDarkMode,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                if (expenseProvider.categoryBudgets.isNotEmpty ||
+                    expenseProvider.savingsGoals.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (expenseProvider.categoryBudgets.isNotEmpty) ...[
+                            const Text(
+                              'CATEGORY BUDGETS',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ...expenseProvider.categoryBudgets.entries.map((
+                              entry,
+                            ) {
+                              final spent =
+                                  expenseProvider.categorySpending[entry.key] ??
+                                  0;
+                              final progress = entry.value == 0
+                                  ? 0.0
+                                  : (spent / entry.value).clamp(0.0, 1.0);
+                              return ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  expenseProvider.categoryName(entry.key),
+                                ),
+                                subtitle: LinearProgressIndicator(
+                                  value: progress,
+                                  color: progress >= 1
+                                      ? Colors.red
+                                      : Colors.orange,
+                                ),
+                                trailing: Text(
+                                  '₹${NumberFormat('#,##,###.##').format(spent)} / ₹${NumberFormat('#,##,###.##').format(entry.value)}',
+                                ),
+                              );
+                            }),
+                          ],
+                          if (expenseProvider.savingsGoals.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            const Text(
+                              'SAVINGS GOALS',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ...expenseProvider.savingsGoals.map(
+                              (goal) => ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(goal.name),
+                                subtitle: LinearProgressIndicator(
+                                  value: goal.targetAmount == 0
+                                      ? 0
+                                      : (goal.currentAmount / goal.targetAmount)
+                                            .clamp(0.0, 1.0),
+                                  color: Colors.green,
+                                ),
+                                trailing: Text(
+                                  '₹${NumberFormat('#,##,###.##').format(goal.currentAmount)} / ₹${NumberFormat('#,##,###.##').format(goal.targetAmount)}',
+                                ),
+                                onTap: () => _showGoalContributionDialog(
+                                  expenseProvider,
+                                  goal,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
 
                 //  Settings List
                 SliverPadding(
@@ -365,6 +716,7 @@ class _AccountPageState extends State<AccountPage> {
     required String title,
     required String trailing,
     required Color color,
+    VoidCallback? onTap,
     bool isLast = false,
   }) {
     return Container(
@@ -423,8 +775,36 @@ class _AccountPageState extends State<AccountPage> {
               ),
             ],
           ),
-          onTap: () {},
+          onTap: onTap,
         ),
+      ),
+    );
+  }
+
+  void _showBalances(ExpenseProvider provider) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Account balances'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: provider.accounts
+              .map(
+                (account) => ListTile(
+                  title: Text(account.name),
+                  trailing: Text(
+                    '₹${NumberFormat('#,##,###.##').format(provider.accountBalances[account.id] ?? 0)}',
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
   }

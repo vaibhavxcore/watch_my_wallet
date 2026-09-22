@@ -14,6 +14,11 @@ class ExpenseProvider extends ChangeNotifier {
   double _budget = 0.0;
   final double _extraIncome = 0.0;
   double _defaultBudget = 0.0;
+  Map<String, double> _categoryBudgets = {};
+  Map<String, double> _accountBalances = {};
+  List<LocalSavingsGoal> _savingsGoals = [];
+  bool _isDarkMode = false;
+  double _budgetWarningThreshold = 0.8;
   bool _isLoading = false;
   String? _error;
 
@@ -24,6 +29,36 @@ class ExpenseProvider extends ChangeNotifier {
   double get budget => _budget;
   double get extraIncome => _extraIncome;
   double get defaultBudget => _defaultBudget;
+  Map<String, double> get categoryBudgets => Map.unmodifiable(_categoryBudgets);
+  Map<String, double> get accountBalances => Map.unmodifiable(_accountBalances);
+  List<LocalSavingsGoal> get savingsGoals => List.unmodifiable(_savingsGoals);
+  bool get isDarkMode => _isDarkMode;
+  double get budgetWarningThreshold => _budgetWarningThreshold;
+  bool get isBudgetWarning =>
+      _budget > 0 && budgetProgress >= _budgetWarningThreshold;
+  Map<String, double> get categorySpending {
+    final now = DateTime.now();
+    final spending = <String, double>{};
+    for (final transaction in _transactions) {
+      if (transaction.type == LocalTransactionType.expense &&
+          transaction.date.month == now.month &&
+          transaction.date.year == now.year) {
+        spending[transaction.categoryId] =
+            (spending[transaction.categoryId] ?? 0) + transaction.amount;
+      }
+    }
+    return spending;
+  }
+
+  Map<String, double> get categoryBudgetWarnings {
+    final spending = categorySpending;
+    return {
+      for (final entry in _categoryBudgets.entries)
+        if ((spending[entry.key] ?? 0) >= entry.value && entry.value > 0)
+          entry.key: spending[entry.key] ?? 0,
+    };
+  }
+
   bool get isLoading => _isLoading;
   String? get error => _error;
 
@@ -75,6 +110,7 @@ class ExpenseProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      await _repository.processRecurringTransactions();
       final localRecords = await _repository.getAll();
       _localTransactions
         ..clear()
@@ -87,6 +123,20 @@ class ExpenseProvider extends ChangeNotifier {
       _categories = await _repository.getCategories(
         type: LocalTransactionType.expense,
       );
+      final budget = await _repository.getBudget();
+      _budget = budget?.amount ?? 0;
+      _defaultBudget = _budget;
+      final categoryBudgets = await _repository.getCategoryBudgets();
+      _categoryBudgets = {
+        for (final item in categoryBudgets) item.categoryId: item.amount,
+      };
+      _accountBalances = await _repository.getAccountBalances();
+      _savingsGoals = await _repository.getSavingsGoals();
+      _isDarkMode = (await _repository.getSetting('theme_mode')) == 'dark';
+      final threshold = double.tryParse(
+        await _repository.getSetting('budget_warning_threshold') ?? '',
+      );
+      _budgetWarningThreshold = threshold ?? 0.8;
       _transactions = localRecords;
       _error = null;
     } catch (e) {
@@ -113,6 +163,7 @@ class ExpenseProvider extends ChangeNotifier {
     String? time,
     String? attachmentPath,
     bool isRecurring = false,
+    String frequency = 'monthly',
   }) async {
     _isLoading = true;
     _error = null;
@@ -130,8 +181,10 @@ class ExpenseProvider extends ChangeNotifier {
         time: time,
         attachmentPath: attachmentPath,
         isRecurring: isRecurring,
+        frequency: frequency,
       );
       _localTransactions[transaction.id] = transaction;
+      _accountBalances = await _repository.getAccountBalances();
       _transactions = [..._transactions, transaction]
         ..sort((a, b) => b.date.compareTo(a.date));
       notifyListeners();
@@ -145,9 +198,78 @@ class ExpenseProvider extends ChangeNotifier {
   }
 
   Future<void> updateBudgetGoal(double amount) async {
+    await _repository.saveBudget(amount);
     _defaultBudget = amount;
     _budget = amount;
     notifyListeners();
+  }
+
+  Future<void> updateCategoryBudget(String categoryId, double amount) async {
+    await _repository.saveCategoryBudget(
+      categoryId: categoryId,
+      amount: amount,
+    );
+    _categoryBudgets[categoryId] = amount;
+    notifyListeners();
+  }
+
+  Future<void> addCategory(String name, LocalTransactionType type) async {
+    final category = await _repository.createCategory(name: name, type: type);
+    if (category.type == LocalTransactionType.expense) {
+      _categories = [..._categories, category]
+        ..sort((a, b) => a.name.compareTo(b.name));
+      notifyListeners();
+    }
+  }
+
+  Future<void> addSavingsGoal({
+    required String name,
+    required double targetAmount,
+    DateTime? targetDate,
+  }) async {
+    final goal = await _repository.saveSavingsGoal(
+      name: name,
+      targetAmount: targetAmount,
+      targetDate: targetDate,
+    );
+    _savingsGoals = [goal, ..._savingsGoals];
+    notifyListeners();
+  }
+
+  Future<void> addSavingsGoalAmount(
+    LocalSavingsGoal goal,
+    double amount,
+  ) async {
+    final updated = await _repository.updateSavingsGoalAmount(
+      goal: goal,
+      currentAmount: (goal.currentAmount + amount).clamp(0, goal.targetAmount),
+    );
+    _savingsGoals = [
+      for (final item in _savingsGoals)
+        if (item.id == updated.id) updated else item,
+    ];
+    notifyListeners();
+  }
+
+  Future<void> setBudgetWarningThreshold(double value) async {
+    final threshold = value.clamp(0.5, 1.0).toDouble();
+    await _repository.saveSetting(
+      'budget_warning_threshold',
+      threshold.toString(),
+    );
+    _budgetWarningThreshold = threshold;
+    notifyListeners();
+  }
+
+  Future<void> setDarkMode(bool value) async {
+    await _repository.saveSetting('theme_mode', value ? 'dark' : 'light');
+    _isDarkMode = value;
+    notifyListeners();
+  }
+
+  Future<void> processRecurringTransactions() async {
+    await _repository.processRecurringTransactions();
+    await initialize();
   }
 
   Future<LocalTransaction?> deleteTransaction(
@@ -164,6 +286,7 @@ class ExpenseProvider extends ChangeNotifier {
     _error = null;
     try {
       await _repository.softDelete(existing);
+      _accountBalances = await _repository.getAccountBalances();
       return existing;
     } catch (e) {
       _localTransactions[id] = existing;
@@ -222,6 +345,7 @@ class ExpenseProvider extends ChangeNotifier {
         _transactions[index] = updated;
         _transactions.sort((a, b) => b.date.compareTo(a.date));
       }
+      _accountBalances = await _repository.getAccountBalances();
       _error = null;
       notifyListeners();
     } catch (e) {

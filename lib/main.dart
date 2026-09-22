@@ -49,17 +49,20 @@ class _MyAppState extends State<MyApp> {
               create: (_) => ExpenseProvider(localDatabase)..initialize(),
             ),
           ],
-          child: _buildApp(),
+          child: Builder(builder: (context) => _buildApp(context)),
         );
       },
     );
   }
 
-  Widget _buildApp() {
+  Widget _buildApp(BuildContext context) {
+    final expenseProvider = context.watch<ExpenseProvider>();
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Watch My Wallet',
       theme: ThemeData(useMaterial3: true, primarySwatch: Colors.blue),
+      darkTheme: ThemeData.dark(useMaterial3: true),
+      themeMode: expenseProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
       home: const SplashScreen(),
     );
   }

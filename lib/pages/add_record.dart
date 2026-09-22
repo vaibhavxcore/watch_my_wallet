@@ -33,6 +33,7 @@ class _AddRecordState extends State<AddRecord> {
   DateTime _selectedDate = DateTime.now();
   TimeOfDay? _selectedTime;
   bool _isRecurring = false;
+  String _recurringFrequency = 'monthly';
   final categoryIcons = CategoryIconsData();
 
   @override
@@ -108,6 +109,7 @@ class _AddRecordState extends State<AddRecord> {
               ? null
               : attachmentController.text.trim(),
           isRecurring: _isRecurring,
+          frequency: _recurringFrequency,
           accountId: _selectedAccountId,
           categoryId: _selectedCategoryId!,
         );
@@ -154,6 +156,7 @@ class _AddRecordState extends State<AddRecord> {
                     ? null
                     : attachmentController.text.trim(),
                 isRecurring: _isRecurring,
+                frequency: _recurringFrequency,
                 accountId: accountId,
                 categoryId: categoryId!,
               );
@@ -182,6 +185,7 @@ class _AddRecordState extends State<AddRecord> {
                     ? null
                     : attachmentController.text.trim(),
                 isRecurring: _isRecurring,
+                frequency: _recurringFrequency,
                 accountId: accountId,
                 categoryId: categoryId!,
               );
@@ -458,6 +462,39 @@ class _AddRecordState extends State<AddRecord> {
                       ),
                     ],
                   ),
+                  if (_isRecurring) ...[
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      initialValue: _recurringFrequency,
+                      decoration: const InputDecoration(
+                        labelText: 'Repeat frequency',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'weekly',
+                          child: Text('Weekly'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'monthly',
+                          child: Text('Monthly'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _recurringFrequency = value);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'A new transaction will be created automatically on each ${_recurringFrequency == 'weekly' ? 'week' : 'month'} when the app starts.',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: attachmentController,
