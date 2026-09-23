@@ -9,10 +9,34 @@ class TransactionRepository {
 
   const TransactionRepository(this._localDatabase);
 
-  Future<List<LocalAccount>> getAccounts() async {
+  Future<void> migrateGuestData(String newUserId) async {
+    await _localDatabase.database.transaction((database) async {
+      const tables = [
+        'accounts',
+        'categories',
+        'transactions',
+        'budgets',
+        'category_budgets',
+        'recurring_transactions',
+        'savings_goals',
+      ];
+
+      for (final table in tables) {
+        await database.update(
+          table,
+          {'user_id': newUserId, 'sync_status': SyncStatus.pendingUpdate.name},
+          where: 'user_id = ? OR user_id IS NULL',
+          whereArgs: ['guest'],
+        );
+      }
+    });
+  }
+
+  Future<List<LocalAccount>> getAccounts({String userId = 'guest'}) async {
     final rows = await _localDatabase.database.query(
       'accounts',
-      where: 'deleted_at IS NULL',
+      where: '(user_id = ? OR user_id IS NULL) AND deleted_at IS NULL',
+      whereArgs: [userId],
       orderBy: 'name ASC',
     );
     return rows.map(LocalAccount.fromMap).toList();
@@ -87,11 +111,13 @@ class TransactionRepository {
 
   Future<List<LocalCategory>> getCategories({
     required LocalTransactionType type,
+    String userId = 'guest',
   }) async {
     final rows = await _localDatabase.database.query(
       'categories',
-      where: 'type = ? AND deleted_at IS NULL',
-      whereArgs: [type.name],
+      where:
+          'type = ? AND (user_id = ? OR user_id IS NULL) AND deleted_at IS NULL',
+      whereArgs: [type.name, userId],
       orderBy: 'name ASC',
     );
     return rows.map(LocalCategory.fromMap).toList();
@@ -100,6 +126,7 @@ class TransactionRepository {
   Future<LocalCategory> createCategory({
     required String name,
     required LocalTransactionType type,
+    String userId = 'guest',
   }) async {
     final now = DateTime.now().toUtc();
     final category = LocalCategory(
@@ -112,6 +139,7 @@ class TransactionRepository {
     );
     await _localDatabase.database.insert('categories', {
       'id': category.id,
+      'user_id': userId,
       'name': category.name,
       'type': category.type.name,
       'is_default': 0,
@@ -209,10 +237,10 @@ class TransactionRepository {
         COALESCE((SELECT SUM(t3.amount) FROM transactions t3 WHERE t3.account_id = a.id AND (t3.type = 'expense' OR t3.type = 'transfer') AND t3.deleted_at IS NULL AND t3.user_id = ?), 0)
         AS balance
       FROM accounts a
-      WHERE a.deleted_at IS NULL
+      WHERE a.deleted_at IS NULL AND (a.user_id = ? OR a.user_id IS NULL)
       GROUP BY a.id
     ''',
-      [userId, userId, userId],
+      [userId, userId, userId, userId],
     );
     return {
       for (final row in rows)

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../auth/auth_service.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -7,23 +8,34 @@ class AuthProvider extends ChangeNotifier {
   User? _user;
   bool _isLoading = false;
   String? _error;
+  bool _isGuestAuthorized = false;
 
   User? get user => _user;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool get isGuestAuthorized => _isGuestAuthorized;
 
   void initialize() {
     _user = Supabase.instance.client.auth.currentUser;
     Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-      // Correct way to access user from AuthState
       _user = data.session?.user;
+      if (_user != null) {
+        _isGuestAuthorized = false;
+      }
       notifyListeners();
     });
+  }
+
+  void continueOffline() {
+    _isGuestAuthorized = true;
+    _error = null;
+    notifyListeners();
   }
 
   Future<void> signIn(String email, String password) async {
     _isLoading = true;
     _error = null;
+    _isGuestAuthorized = false;
     notifyListeners();
     try {
       await _authService.signInWithEmailAndPassword(email, password);
@@ -40,6 +52,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> signUp(String email, String password) async {
     _isLoading = true;
     _error = null;
+    _isGuestAuthorized = false;
     notifyListeners();
     try {
       await _authService.signUpWithEmailAndPassword(email, password);
@@ -52,6 +65,8 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    _isGuestAuthorized = false;
     await _authService.signOut();
+    notifyListeners();
   }
 }

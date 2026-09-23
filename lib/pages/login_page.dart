@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:watch_my_wallet/pages/sign_up_page.dart';
-import 'package:watch_my_wallet/pages/main_layout.dart';
-
 import '../providers/auth_provider.dart';
 
 class LoginPage extends StatefulWidget {
@@ -54,7 +52,8 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isLoading = context.watch<AuthProvider>().isLoading;
+    final authProvider = context.watch<AuthProvider>();
+    final isLoading = authProvider.isLoading;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Sign In')),
@@ -128,9 +127,7 @@ class _LoginPageState extends State<LoginPage> {
               onPressed: isLoading
                   ? null
                   : () {
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const MainLayout()),
-                      );
+                      context.read<AuthProvider>().continueOffline();
                     },
               child: const Text(
                 'Continue Offline',

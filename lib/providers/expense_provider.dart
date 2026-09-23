@@ -7,6 +7,9 @@ import '../data/repositories/transaction_repository.dart';
 class ExpenseProvider extends ChangeNotifier {
   final TransactionRepository _repository;
 
+  String _currentUserId = 'guest';
+  String get currentUserId => _currentUserId;
+
   List<LocalTransaction> _transactions = [];
   final Map<String, LocalTransaction> _localTransactions = {};
   List<LocalAccount> _accounts = [];
@@ -106,14 +109,22 @@ class ExpenseProvider extends ChangeNotifier {
   ExpenseProvider(LocalDatabase database)
     : _repository = TransactionRepository(database);
 
+  Future<void> setUserId(String userId, {bool migrateGuest = false}) async {
+    if (migrateGuest && _currentUserId == 'guest' && userId != 'guest') {
+      await _repository.migrateGuestData(userId);
+    }
+    _currentUserId = userId;
+    await initialize();
+  }
+
   Future<void> initialize() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      await _repository.processRecurringTransactions();
-      final localRecords = await _repository.getAll();
+      await _repository.processRecurringTransactions(userId: _currentUserId);
+      final localRecords = await _repository.getAll(userId: _currentUserId);
       _localTransactions
         ..clear()
         ..addEntries(
@@ -121,27 +132,38 @@ class ExpenseProvider extends ChangeNotifier {
             (transaction) => MapEntry(transaction.id, transaction),
           ),
         );
-      _accounts = await _repository.getAccounts();
+      _accounts = await _repository.getAccounts(userId: _currentUserId);
       _rememberAccountNames(_accounts);
       _categories = await _repository.getCategories(
         type: LocalTransactionType.expense,
+        userId: _currentUserId,
       );
       _rememberCategoryNames(_categories);
       _rememberCategoryNames(
-        await _repository.getCategories(type: LocalTransactionType.income),
+        await _repository.getCategories(
+          type: LocalTransactionType.income,
+          userId: _currentUserId,
+        ),
       );
       _rememberCategoryNames(
-        await _repository.getCategories(type: LocalTransactionType.transfer),
+        await _repository.getCategories(
+          type: LocalTransactionType.transfer,
+          userId: _currentUserId,
+        ),
       );
-      final budget = await _repository.getBudget();
+      final budget = await _repository.getBudget(userId: _currentUserId);
       _budget = budget?.amount ?? 0;
       _defaultBudget = _budget;
-      final categoryBudgets = await _repository.getCategoryBudgets();
+      final categoryBudgets = await _repository.getCategoryBudgets(
+        userId: _currentUserId,
+      );
       _categoryBudgets = {
         for (final item in categoryBudgets) item.categoryId: item.amount,
       };
-      _accountBalances = await _repository.getAccountBalances();
-      _savingsGoals = await _repository.getSavingsGoals();
+      _accountBalances = await _repository.getAccountBalances(
+        userId: _currentUserId,
+      );
+      _savingsGoals = await _repository.getSavingsGoals(userId: _currentUserId);
       _isDarkMode = (await _repository.getSetting('theme_mode')) == 'dark';
       final threshold = double.tryParse(
         await _repository.getSetting('budget_warning_threshold') ?? '',
@@ -158,7 +180,10 @@ class ExpenseProvider extends ChangeNotifier {
   }
 
   Future<void> loadCategories(LocalTransactionType type) async {
-    _categories = await _repository.getCategories(type: type);
+    _categories = await _repository.getCategories(
+      type: type,
+      userId: _currentUserId,
+    );
     _rememberCategoryNames(_categories);
     notifyListeners();
   }
@@ -183,7 +208,7 @@ class ExpenseProvider extends ChangeNotifier {
 
     try {
       final transaction = await _repository.create(
-        userId: 'guest',
+        userId: _currentUserId,
         accountId: accountId,
         toAccountId: toAccountId,
         categoryId: categoryId,
@@ -197,7 +222,9 @@ class ExpenseProvider extends ChangeNotifier {
         frequency: frequency,
       );
       _localTransactions[transaction.id] = transaction;
-      _accountBalances = await _repository.getAccountBalances();
+      _accountBalances = await _repository.getAccountBalances(
+        userId: _currentUserId,
+      );
       _transactions = [..._transactions, transaction]
         ..sort((a, b) => b.date.compareTo(a.date));
       notifyListeners();
@@ -213,14 +240,18 @@ class ExpenseProvider extends ChangeNotifier {
   Future<List<LocalTransaction>> getTransactionsByAccount(
     String accountId,
   ) async {
-    return await _repository.getByAccount(accountId);
+    return await _repository.getByAccount(accountId, userId: _currentUserId);
   }
 
   Future<void> addAccount({
     required String name,
     required double openingBalance,
   }) async {
-    await _repository.createAccount(name: name, openingBalance: openingBalance);
+    await _repository.createAccount(
+      name: name,
+      openingBalance: openingBalance,
+      userId: _currentUserId,
+    );
     await _refreshAccounts();
   }
 
@@ -246,7 +277,7 @@ class ExpenseProvider extends ChangeNotifier {
   }
 
   Future<void> updateBudgetGoal(double amount) async {
-    await _repository.saveBudget(amount);
+    await _repository.saveBudget(amount, userId: _currentUserId);
     _defaultBudget = amount;
     _budget = amount;
     notifyListeners();
@@ -256,13 +287,18 @@ class ExpenseProvider extends ChangeNotifier {
     await _repository.saveCategoryBudget(
       categoryId: categoryId,
       amount: amount,
+      userId: _currentUserId,
     );
     _categoryBudgets[categoryId] = amount;
     notifyListeners();
   }
 
   Future<void> addCategory(String name, LocalTransactionType type) async {
-    final category = await _repository.createCategory(name: name, type: type);
+    final category = await _repository.createCategory(
+      name: name,
+      type: type,
+      userId: _currentUserId,
+    );
     _categoryNames[category.id] = category.name;
     if (category.type == type) {
       _categories = [..._categories, category]
@@ -280,6 +316,7 @@ class ExpenseProvider extends ChangeNotifier {
       name: name,
       targetAmount: targetAmount,
       targetDate: targetDate,
+      userId: _currentUserId,
     );
     _savingsGoals = [goal, ..._savingsGoals];
     notifyListeners();
@@ -317,7 +354,7 @@ class ExpenseProvider extends ChangeNotifier {
   }
 
   Future<void> processRecurringTransactions() async {
-    await _repository.processRecurringTransactions();
+    await _repository.processRecurringTransactions(userId: _currentUserId);
     await initialize();
   }
 
@@ -335,7 +372,9 @@ class ExpenseProvider extends ChangeNotifier {
     _error = null;
     try {
       await _repository.softDelete(existing);
-      _accountBalances = await _repository.getAccountBalances();
+      _accountBalances = await _repository.getAccountBalances(
+        userId: _currentUserId,
+      );
       return existing;
     } catch (e) {
       _localTransactions[id] = existing;
@@ -395,7 +434,9 @@ class ExpenseProvider extends ChangeNotifier {
         _transactions[index] = updated;
         _transactions.sort((a, b) => b.date.compareTo(a.date));
       }
-      _accountBalances = await _repository.getAccountBalances();
+      _accountBalances = await _repository.getAccountBalances(
+        userId: _currentUserId,
+      );
       _error = null;
       notifyListeners();
     } catch (e) {
@@ -419,9 +460,11 @@ class ExpenseProvider extends ChangeNotifier {
   }
 
   Future<void> _refreshAccounts() async {
-    _accounts = await _repository.getAccounts();
+    _accounts = await _repository.getAccounts(userId: _currentUserId);
     _rememberAccountNames(_accounts);
-    _accountBalances = await _repository.getAccountBalances();
+    _accountBalances = await _repository.getAccountBalances(
+      userId: _currentUserId,
+    );
     notifyListeners();
   }
 
