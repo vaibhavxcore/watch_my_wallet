@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:watch_my_wallet/providers/expense_provider.dart';
 import 'package:watch_my_wallet/data/models/local_entities.dart';
+import 'package:watch_my_wallet/providers/expense_provider.dart';
 
 import '../core/utils/category_icons_data.dart';
 
@@ -15,7 +15,7 @@ class AddRecord extends StatefulWidget {
   State<AddRecord> createState() => _AddRecordState();
 }
 
-enum RecordType { income, expense }
+enum RecordType { income, expense, transfer }
 
 class _AddRecordState extends State<AddRecord> {
   final TextEditingController descriptionController = TextEditingController();
@@ -29,6 +29,7 @@ class _AddRecordState extends State<AddRecord> {
 
   RecordType _selectedType = RecordType.expense;
   String _selectedAccountId = 'account_cash';
+  String? _selectedToAccountId;
   String? _selectedCategoryId;
   DateTime _selectedDate = DateTime.now();
   TimeOfDay? _selectedTime;
@@ -95,8 +96,14 @@ class _AddRecordState extends State<AddRecord> {
 
   void _submitData() async {
     if (!_formKey.currentState!.validate()) return;
-    if (labelValueListenable.value == null) {
+    if (_selectedType != RecordType.transfer &&
+        labelValueListenable.value == null) {
       _showErrorSnackBar("Please select a category");
+      return;
+    }
+    if (_selectedType == RecordType.transfer &&
+        _selectedAccountId == _selectedToAccountId) {
+      _showErrorSnackBar("Source and Destination accounts cannot be the same");
       return;
     }
 
@@ -110,6 +117,29 @@ class _AddRecordState extends State<AddRecord> {
           accountId: _selectedAccountId,
           categoryId: _selectedCategoryId,
         );
+      } else if (_selectedType == RecordType.transfer) {
+        await expenseProvider.addTransaction(
+          amount: amount,
+          type: LocalTransactionType.transfer,
+          note: descriptionController.text.trim().isEmpty
+              ? "Account Transfer"
+              : descriptionController.text,
+          date: _selectedDate,
+          time: _selectedTime?.format(context),
+          attachmentPath: attachmentController.text.trim().isEmpty
+              ? null
+              : attachmentController.text.trim(),
+          isRecurring: _isRecurring,
+          frequency: _recurringFrequency,
+          accountId: _selectedAccountId,
+          toAccountId: _selectedToAccountId!,
+          categoryId: 'category_transfer_default',
+        );
+        if (expenseProvider.error != null) {
+          _showErrorSnackBar(expenseProvider.error!);
+        } else if (mounted) {
+          Navigator.pop(context);
+        }
       } else {
         await expenseProvider.addTransaction(
           amount: amount,
@@ -236,6 +266,15 @@ class _AddRecordState extends State<AddRecord> {
         )
         .toList();
 
+    // find a fallback value if previous account selection is no longer valid or set up destination account options
+    final eligibleDestinationAccounts = expenseProvider.accounts
+        .where((account) => account.id != _selectedAccountId)
+        .toList();
+    if (_selectedToAccountId == null &&
+        eligibleDestinationAccounts.isNotEmpty) {
+      _selectedToAccountId = eligibleDestinationAccounts.first.id;
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -270,6 +309,11 @@ class _AddRecordState extends State<AddRecord> {
                           label: Text("Income"),
                           icon: Icon(Icons.add_circle_outline),
                         ),
+                        ButtonSegment(
+                          value: RecordType.transfer,
+                          label: Text("Transfer"),
+                          icon: Icon(Icons.swap_horiz),
+                        ),
                       ],
                       selected: {_selectedType},
                       onSelectionChanged: (val) async {
@@ -279,11 +323,13 @@ class _AddRecordState extends State<AddRecord> {
                         setState(() {
                           _selectedType = selectedType;
                         });
-                        await expenseProvider.loadCategories(
-                          selectedType == RecordType.income
-                              ? LocalTransactionType.income
-                              : LocalTransactionType.expense,
-                        );
+                        if (selectedType != RecordType.transfer) {
+                          await expenseProvider.loadCategories(
+                            selectedType == RecordType.income
+                                ? LocalTransactionType.income
+                                : LocalTransactionType.expense,
+                          );
+                        }
                       },
                       style: SegmentedButton.styleFrom(
                         selectedBackgroundColor: Colors.black,
@@ -327,57 +373,61 @@ class _AddRecordState extends State<AddRecord> {
                   ),
                   const Divider(),
                   const SizedBox(height: 24),
-                  const Text(
-                    "Category",
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField2<String>(
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                      contentPadding: const EdgeInsets.symmetric(vertical: 4),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
+                  if (_selectedType != RecordType.transfer) ...[
+                    const Text(
+                      "Category",
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    hint: const Text('Select Category'),
-                    valueListenable: labelValueListenable,
-                    items: currentLabels
-                        .map(
-                          (item) => DropdownItem<String>(
-                            value: item['label'],
-                            child: Row(
-                              children: [
-                                Icon(item['icon'], color: Colors.black87),
-                                const SizedBox(width: 12),
-                                Text(item['label']),
-                              ],
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField2<String>(
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                        contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      hint: const Text('Select Category'),
+                      valueListenable: labelValueListenable,
+                      items: currentLabels
+                          .map(
+                            (item) => DropdownItem<String>(
+                              value: item['label'],
+                              child: Row(
+                                children: [
+                                  Icon(item['icon'], color: Colors.black87),
+                                  const SizedBox(width: 12),
+                                  Text(item['label']),
+                                ],
+                              ),
                             ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      labelValueListenable.value = value;
-                      final matchingCategories = expenseProvider.categories
-                          .where((category) => category.name == value)
-                          .toList();
-                      _selectedCategoryId = matchingCategories.isEmpty
-                          ? null
-                          : matchingCategories.first.id;
-                    },
-                    validator: (value) =>
-                        value == null ? 'Select category' : null,
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    "Account",
-                    style: TextStyle(
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        labelValueListenable.value = value;
+                        final matchingCategories = expenseProvider.categories
+                            .where((category) => category.name == value)
+                            .toList();
+                        _selectedCategoryId = matchingCategories.isEmpty
+                            ? null
+                            : matchingCategories.first.id;
+                      },
+                      validator: (value) =>
+                          value == null ? 'Select category' : null,
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                  Text(
+                    _selectedType == RecordType.transfer
+                        ? "From Account"
+                        : "Account",
+                    style: const TextStyle(
                       color: Colors.grey,
                       fontWeight: FontWeight.bold,
                     ),
@@ -404,10 +454,52 @@ class _AddRecordState extends State<AddRecord> {
                         .toList(),
                     onChanged: (value) {
                       if (value != null) {
-                        setState(() => _selectedAccountId = value);
+                        setState(() {
+                          _selectedAccountId = value;
+                          _selectedToAccountId =
+                              null; // force recalculation of eligible accounts
+                        });
                       }
                     },
                   ),
+                  if (_selectedType == RecordType.transfer) ...[
+                    const SizedBox(height: 24),
+                    const Text(
+                      "To Account",
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedToAccountId,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      items: eligibleDestinationAccounts
+                          .map(
+                            (account) => DropdownMenuItem<String>(
+                              value: account.id,
+                              child: Text(account.name),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _selectedToAccountId = value);
+                        }
+                      },
+                      validator: (value) =>
+                          value == null ? 'Select target account' : null,
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   const Text(
                     "Date",
@@ -533,7 +625,9 @@ class _AddRecordState extends State<AddRecord> {
                   TextFormField(
                     controller: descriptionController,
                     decoration: InputDecoration(
-                      hintText: "e.g., Grocery store",
+                      hintText: _selectedType == RecordType.transfer
+                          ? "e.g., Monthly savings shift"
+                          : "e.g., Grocery store",
                       filled: true,
                       fillColor: Colors.grey[100],
                       border: OutlineInputBorder(
@@ -542,7 +636,9 @@ class _AddRecordState extends State<AddRecord> {
                       ),
                     ),
                     validator: (value) =>
-                        value!.isEmpty ? 'Enter description' : null,
+                        _selectedType != RecordType.transfer && value!.isEmpty
+                        ? 'Enter description'
+                        : null,
                   ),
                   const SizedBox(height: 40),
                   SizedBox(

@@ -23,6 +23,7 @@ dependencies:
   fl_chart: ^0.71.0
   sqflite_sqlcipher: ^3.4.1
   path: ^1.9.1
+  flutter_secure_storage: ^9.2.2
 
 dev_dependencies:
   flutter_test:

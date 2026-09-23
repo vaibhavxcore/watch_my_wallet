@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:watch_my_wallet/data/local/local_database.dart';
+import 'package:watch_my_wallet/data/local/security_manager.dart';
 import 'package:watch_my_wallet/providers/auth_provider.dart';
 import 'package:watch_my_wallet/providers/expense_provider.dart';
 import 'package:watch_my_wallet/screens/splash_screen.dart';
-import 'package:watch_my_wallet/data/local/local_database.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,9 +26,12 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  late final Future<LocalDatabase> _localDatabase = LocalDatabase.open(
-    key: 'watch-my-wallet-local-key',
-  );
+  late final Future<LocalDatabase> _localDatabase = _initDatabase();
+
+  Future<LocalDatabase> _initDatabase() async {
+    final key = await SecurityManager.getDatabaseKey();
+    return LocalDatabase.open(key: key);
+  }
 
   @override
   Widget build(BuildContext context) {

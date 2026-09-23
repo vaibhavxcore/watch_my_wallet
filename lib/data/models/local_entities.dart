@@ -1,4 +1,4 @@
-enum LocalTransactionType { income, expense }
+enum LocalTransactionType { income, expense, transfer }
 
 enum SyncStatus { synced, pendingCreate, pendingUpdate, pendingDelete, failed }
 
@@ -67,6 +67,7 @@ class LocalTransaction {
   final String id;
   final String userId;
   final String accountId;
+  final String? toAccountId; // Added for transfers
   final String categoryId;
   final double amount;
   final LocalTransactionType type;
@@ -84,6 +85,7 @@ class LocalTransaction {
     required this.id,
     required this.userId,
     required this.accountId,
+    this.toAccountId,
     required this.categoryId,
     required this.amount,
     required this.type,
@@ -103,6 +105,7 @@ class LocalTransaction {
       'id': id,
       'user_id': userId,
       'account_id': accountId,
+      'to_account_id': toAccountId,
       'category_id': categoryId,
       'amount': amount,
       'type': type.name,
@@ -123,6 +126,7 @@ class LocalTransaction {
       id: map['id']! as String,
       userId: map['user_id']! as String,
       accountId: map['account_id']! as String,
+      toAccountId: map['to_account_id'] as String?,
       categoryId: map['category_id']! as String,
       amount: (map['amount']! as num).toDouble(),
       type: _transactionType(map['type']! as String),
@@ -142,6 +146,7 @@ class LocalTransaction {
     String? id,
     String? userId,
     String? accountId,
+    String? toAccountId,
     String? categoryId,
     double? amount,
     LocalTransactionType? type,
@@ -159,6 +164,7 @@ class LocalTransaction {
       id: id ?? this.id,
       userId: userId ?? this.userId,
       accountId: accountId ?? this.accountId,
+      toAccountId: toAccountId ?? this.toAccountId,
       categoryId: categoryId ?? this.categoryId,
       amount: amount ?? this.amount,
       type: type ?? this.type,

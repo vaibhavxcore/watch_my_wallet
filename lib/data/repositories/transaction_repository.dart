@@ -203,16 +203,16 @@ class TransactionRepository {
   }) async {
     final rows = await _localDatabase.database.rawQuery(
       '''
-      SELECT a.id, a.opening_balance + COALESCE(SUM(
-        CASE WHEN t.type = 'income' THEN t.amount ELSE -t.amount END
-      ), 0) AS balance
+      SELECT a.id, a.opening_balance + 
+        COALESCE((SELECT SUM(t1.amount) FROM transactions t1 WHERE t1.account_id = a.id AND t1.type = 'income' AND t1.deleted_at IS NULL AND t1.user_id = ?), 0) +
+        COALESCE((SELECT SUM(t2.amount) FROM transactions t2 WHERE t2.to_account_id = a.id AND t2.type = 'transfer' AND t2.deleted_at IS NULL AND t2.user_id = ?), 0) -
+        COALESCE((SELECT SUM(t3.amount) FROM transactions t3 WHERE t3.account_id = a.id AND (t3.type = 'expense' OR t3.type = 'transfer') AND t3.deleted_at IS NULL AND t3.user_id = ?), 0)
+        AS balance
       FROM accounts a
-      LEFT JOIN transactions t ON t.account_id = a.id
-        AND t.deleted_at IS NULL AND t.user_id = ?
       WHERE a.deleted_at IS NULL
       GROUP BY a.id
     ''',
-      [userId],
+      [userId, userId, userId],
     );
     return {
       for (final row in rows)
@@ -317,6 +317,7 @@ class TransactionRepository {
         await create(
           userId: source.userId,
           accountId: source.accountId,
+          toAccountId: source.toAccountId,
           categoryId: source.categoryId,
           amount: source.amount,
           type: source.type,
@@ -348,6 +349,20 @@ class TransactionRepository {
     return rows.map(LocalTransaction.fromMap).toList();
   }
 
+  Future<List<LocalTransaction>> getByAccount(
+    String accountId, {
+    String userId = 'guest',
+  }) async {
+    final rows = await _localDatabase.database.query(
+      'transactions',
+      where:
+          'user_id = ? AND (account_id = ? OR to_account_id = ?) AND deleted_at IS NULL',
+      whereArgs: [userId, accountId, accountId],
+      orderBy: 'transaction_date DESC, created_at DESC',
+    );
+    return rows.map(LocalTransaction.fromMap).toList();
+  }
+
   Future<LocalTransaction?> getById(String id) async {
     final rows = await _localDatabase.database.query(
       'transactions',
@@ -361,6 +376,7 @@ class TransactionRepository {
   Future<LocalTransaction> create({
     required String userId,
     required String accountId,
+    String? toAccountId,
     required String categoryId,
     required double amount,
     required LocalTransactionType type,
@@ -376,6 +392,7 @@ class TransactionRepository {
       id: 'transaction_${now.microsecondsSinceEpoch}',
       userId: userId,
       accountId: accountId,
+      toAccountId: toAccountId,
       categoryId: categoryId,
       amount: amount,
       type: type,
@@ -415,6 +432,7 @@ class TransactionRepository {
       id: transaction.id,
       userId: transaction.userId,
       accountId: transaction.accountId,
+      toAccountId: transaction.toAccountId,
       categoryId: transaction.categoryId,
       amount: transaction.amount,
       type: transaction.type,
@@ -446,6 +464,7 @@ class TransactionRepository {
       id: transaction.id,
       userId: transaction.userId,
       accountId: transaction.accountId,
+      toAccountId: transaction.toAccountId,
       categoryId: transaction.categoryId,
       amount: transaction.amount,
       type: transaction.type,

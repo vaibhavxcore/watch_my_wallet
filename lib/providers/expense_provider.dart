@@ -130,6 +130,9 @@ class ExpenseProvider extends ChangeNotifier {
       _rememberCategoryNames(
         await _repository.getCategories(type: LocalTransactionType.income),
       );
+      _rememberCategoryNames(
+        await _repository.getCategories(type: LocalTransactionType.transfer),
+      );
       final budget = await _repository.getBudget();
       _budget = budget?.amount ?? 0;
       _defaultBudget = _budget;
@@ -163,6 +166,7 @@ class ExpenseProvider extends ChangeNotifier {
   Future<void> addTransaction({
     bool toBudget = false,
     required String accountId,
+    String? toAccountId,
     required String categoryId,
     required double amount,
     required LocalTransactionType type,
@@ -181,6 +185,7 @@ class ExpenseProvider extends ChangeNotifier {
       final transaction = await _repository.create(
         userId: 'guest',
         accountId: accountId,
+        toAccountId: toAccountId,
         categoryId: categoryId,
         amount: amount,
         type: type,
@@ -203,6 +208,12 @@ class ExpenseProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<List<LocalTransaction>> getTransactionsByAccount(
+    String accountId,
+  ) async {
+    return await _repository.getByAccount(accountId);
   }
 
   Future<void> addAccount({
@@ -253,7 +264,7 @@ class ExpenseProvider extends ChangeNotifier {
   Future<void> addCategory(String name, LocalTransactionType type) async {
     final category = await _repository.createCategory(name: name, type: type);
     _categoryNames[category.id] = category.name;
-    if (category.type == LocalTransactionType.expense) {
+    if (category.type == type) {
       _categories = [..._categories, category]
         ..sort((a, b) => a.name.compareTo(b.name));
       notifyListeners();
@@ -363,6 +374,7 @@ class ExpenseProvider extends ChangeNotifier {
           id: existing.id,
           userId: existing.userId,
           accountId: existing.accountId,
+          toAccountId: existing.toAccountId,
           categoryId: existing.categoryId,
           amount: amount ?? existing.amount,
           type: existing.type,
