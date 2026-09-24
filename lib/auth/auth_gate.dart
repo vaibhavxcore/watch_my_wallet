@@ -19,6 +19,14 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
+
+    // Show a loading indicator until the AuthProvider has finished reading from secure storage
+    if (!authProvider.isInitialized) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator.adaptive()),
+      );
+    }
+
     final user = authProvider.user;
     final isGuest = authProvider.isGuestAuthorized;
 

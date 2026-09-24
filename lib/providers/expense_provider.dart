@@ -17,7 +17,6 @@ class ExpenseProvider extends ChangeNotifier {
   List<LocalCategory> _categories = [];
   final Map<String, String> _categoryNames = {};
   double _budget = 0.0;
-  final double _extraIncome = 0.0;
   double _defaultBudget = 0.0;
   Map<String, double> _categoryBudgets = {};
   Map<String, double> _accountBalances = {};
@@ -32,7 +31,8 @@ class ExpenseProvider extends ChangeNotifier {
   List<LocalAccount> get accounts => List.unmodifiable(_accounts);
   List<LocalCategory> get categories => List.unmodifiable(_categories);
   double get budget => _budget;
-  double get extraIncome => _extraIncome;
+  double get extraIncome =>
+      _accountBalances.values.fold(0.0, (sum, balance) => sum + balance);
   double get defaultBudget => _defaultBudget;
   Map<String, double> get categoryBudgets => Map.unmodifiable(_categoryBudgets);
   Map<String, double> get accountBalances => Map.unmodifiable(_accountBalances);
@@ -124,6 +124,22 @@ class ExpenseProvider extends ChangeNotifier {
 
     try {
       await _repository.processRecurringTransactions(userId: _currentUserId);
+
+      // Seed default accounts and categories for guest or real user if none exist yet
+      final existingAccounts = await _repository.getAccounts(
+        userId: _currentUserId,
+      );
+      if (existingAccounts.isEmpty) {
+        await _repository.seedDefaultAccounts(_currentUserId);
+      }
+      final existingExpenseCategories = await _repository.getCategories(
+        type: LocalTransactionType.expense,
+        userId: _currentUserId,
+      );
+      if (existingExpenseCategories.isEmpty) {
+        await _repository.seedDefaultCategories(_currentUserId);
+      }
+
       final localRecords = await _repository.getAll(userId: _currentUserId);
       _localTransactions
         ..clear()
@@ -222,6 +238,12 @@ class ExpenseProvider extends ChangeNotifier {
         frequency: frequency,
       );
       _localTransactions[transaction.id] = transaction;
+
+      if (toBudget && type == LocalTransactionType.income) {
+        _budget += amount;
+        await _repository.saveBudget(_budget, userId: _currentUserId);
+      }
+
       _accountBalances = await _repository.getAccountBalances(
         userId: _currentUserId,
       );

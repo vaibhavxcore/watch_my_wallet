@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:watch_my_wallet/core/utils/category_icons_data.dart';
-import 'package:watch_my_wallet/providers/expense_provider.dart';
 import 'package:watch_my_wallet/data/models/local_entities.dart';
+import 'package:watch_my_wallet/providers/expense_provider.dart';
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({super.key});
@@ -14,14 +14,13 @@ class CalendarPage extends StatefulWidget {
 
 class _CalendarPageState extends State<CalendarPage> {
   DateTime _selectedDate = DateTime.now();
+  DateTime _currentMonthView = DateTime.now();
   final categoryIcon = CategoryIconsData();
 
   @override
   Widget build(BuildContext context) {
-    // 1. Access the provider
     final expenseProvider = context.watch<ExpenseProvider>();
 
-    // 2. Filter records in memory for the selected date
     final filteredTransactions = expenseProvider.transactions
         .where(
           (record) =>
@@ -35,7 +34,7 @@ class _CalendarPageState extends State<CalendarPage> {
       backgroundColor: const Color(0xFFF8F9FB),
       appBar: AppBar(
         title: const Text(
-          "History",
+          "Interactive Calendar",
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
@@ -51,7 +50,6 @@ class _CalendarPageState extends State<CalendarPage> {
     ExpenseProvider provider,
     List<LocalTransaction> transactions,
   ) {
-    // 3. Error Boundary
     if (provider.error != null && provider.transactions.isEmpty) {
       return _buildErrorWidget(provider.error!);
     }
@@ -59,10 +57,11 @@ class _CalendarPageState extends State<CalendarPage> {
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: [
-        // Calendar Section
+        // Custom Styled Interactive Calendar Header & Grid
         SliverToBoxAdapter(
           child: Container(
             margin: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(28),
@@ -74,15 +73,131 @@ class _CalendarPageState extends State<CalendarPage> {
                 ),
               ],
             ),
-            child: CalendarDatePicker(
-              initialDate: _selectedDate,
-              firstDate: DateTime(2000),
-              lastDate: DateTime.now(),
-              onDateChanged: (date) {
-                setState(() {
-                  _selectedDate = date;
-                });
-              },
+            child: Column(
+              children: [
+                // Month Selector Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left),
+                      onPressed: () {
+                        setState(() {
+                          _currentMonthView = DateTime(
+                            _currentMonthView.year,
+                            _currentMonthView.month - 1,
+                          );
+                        });
+                      },
+                    ),
+                    Text(
+                      DateFormat('MMMM yyyy').format(_currentMonthView),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right),
+                      onPressed: () {
+                        setState(() {
+                          _currentMonthView = DateTime(
+                            _currentMonthView.year,
+                            _currentMonthView.month + 1,
+                          );
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // Days of week header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: const [
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'Su',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'Mo',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'Tu',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'We',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'Th',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'Fr',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'Sa',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // Monthly Calendar Grid with Indicators
+                _buildCalendarGrid(provider),
+              ],
             ),
           ),
         ),
@@ -204,6 +319,121 @@ class _CalendarPageState extends State<CalendarPage> {
 
         const SliverToBoxAdapter(child: SizedBox(height: 100)),
       ],
+    );
+  }
+
+  Widget _buildCalendarGrid(ExpenseProvider provider) {
+    final firstDayOfMonth = DateTime(
+      _currentMonthView.year,
+      _currentMonthView.month,
+      1,
+    );
+    final lastDayOfMonth = DateTime(
+      _currentMonthView.year,
+      _currentMonthView.month + 1,
+      0,
+    );
+
+    final leadingEmptyDays = firstDayOfMonth.weekday % 7;
+    final totalDays = lastDayOfMonth.day;
+
+    final List<Widget> dayWidgets = [];
+
+    // Add empty space for previous month's overlapping days
+    for (int i = 0; i < leadingEmptyDays; i++) {
+      dayWidgets.add(const SizedBox());
+    }
+
+    // Generate each day card with indicator dots
+    for (int day = 1; day <= totalDays; day++) {
+      final currentDayDateTime = DateTime(
+        _currentMonthView.year,
+        _currentMonthView.month,
+        day,
+      );
+      final isSelected =
+          _selectedDate.year == currentDayDateTime.year &&
+          _selectedDate.month == currentDayDateTime.month &&
+          _selectedDate.day == currentDayDateTime.day;
+
+      // Extract current day transactions to add appropriate colors
+      final dayTransactions = provider.transactions
+          .where(
+            (t) =>
+                t.date.year == currentDayDateTime.year &&
+                t.date.month == currentDayDateTime.month &&
+                t.date.day == currentDayDateTime.day,
+          )
+          .toList();
+
+      final hasIncome = dayTransactions.any(
+        (t) => t.type == LocalTransactionType.income,
+      );
+      final hasExpense = dayTransactions.any(
+        (t) => t.type == LocalTransactionType.expense,
+      );
+
+      dayWidgets.add(
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              _selectedDate = currentDayDateTime;
+            });
+          },
+          child: Container(
+            margin: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: isSelected ? Colors.black : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '$day',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isSelected ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (hasIncome)
+                      Container(
+                        width: 5,
+                        height: 5,
+                        margin: const EdgeInsets.symmetric(horizontal: 1),
+                        decoration: const BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    if (hasExpense)
+                      Container(
+                        width: 5,
+                        height: 5,
+                        margin: const EdgeInsets.symmetric(horizontal: 1),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 7,
+      children: dayWidgets,
     );
   }
 

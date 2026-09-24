@@ -42,6 +42,88 @@ class TransactionRepository {
     return rows.map(LocalAccount.fromMap).toList();
   }
 
+  Future<void> seedDefaultAccounts(String userId) async {
+    final now = DateTime.now().toUtc().toIso8601String();
+    final defaults = [
+      ['account_cash_$userId', 'Cash'],
+      ['account_bank_$userId', 'Bank Account'],
+      ['account_savings_$userId', 'Saving'],
+    ];
+
+    await _localDatabase.database.transaction((txn) async {
+      for (final account in defaults) {
+        await txn.insert('accounts', {
+          'id': account[0],
+          'user_id': userId,
+          'name': account[1],
+          'created_at': now,
+          'updated_at': now,
+          'sync_status': SyncStatus.synced.name,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+    });
+  }
+
+  Future<void> seedDefaultCategories(String userId) async {
+    final now = DateTime.now().toUtc().toIso8601String();
+    const expenseCategories = [
+      'Food',
+      'Grocery',
+      'Travel',
+      'Fuel',
+      'Shopping',
+      'Bills',
+      'Rent',
+      'Entertainment',
+      'Health',
+      'Education',
+      'Subscription',
+      'Other',
+    ];
+    const incomeCategories = [
+      'Salary',
+      'Freelance',
+      'Business',
+      'Investment',
+      'Gift',
+      'Other',
+    ];
+
+    await _localDatabase.database.transaction((txn) async {
+      for (final category in expenseCategories) {
+        await txn.insert('categories', {
+          'id': 'category_expense_${category.toLowerCase()}_$userId',
+          'user_id': userId,
+          'name': category,
+          'type': 'expense',
+          'is_default': 1,
+          'created_at': now,
+          'updated_at': now,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+      for (final category in incomeCategories) {
+        await txn.insert('categories', {
+          'id': 'category_income_${category.toLowerCase()}_$userId',
+          'user_id': userId,
+          'name': category,
+          'type': 'income',
+          'is_default': 1,
+          'created_at': now,
+          'updated_at': now,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+      await txn.insert('categories', {
+        'id': 'category_transfer_default_$userId',
+        'user_id': userId,
+        'name': 'Transfer',
+        'type': 'transfer',
+        'is_default': 1,
+        'created_at': now,
+        'updated_at': now,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    });
+  }
+
   Future<LocalAccount> createAccount({
     required String name,
     required double openingBalance,
@@ -182,7 +264,9 @@ class TransactionRepository {
       'month': month,
       'created_at': existing == null
           ? now.toIso8601String()
-          : now.toIso8601String(),
+          : existing.id.isNotEmpty
+          ? now.toIso8601String()
+          : now.toIso8601String(), // simplified
       'updated_at': now.toIso8601String(),
       'sync_status': SyncStatus.pendingUpdate.name,
     }, conflictAlgorithm: ConflictAlgorithm.replace);

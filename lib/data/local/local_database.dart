@@ -197,9 +197,7 @@ class LocalDatabase {
     const accounts = [
       ['account_cash', 'Cash'],
       ['account_bank', 'Bank Account'],
-      ['account_credit_card', 'Credit Card'],
-      ['account_wallet', 'Wallet'],
-      ['account_savings', 'Savings Account'],
+      ['account_savings', 'Saving'],
     ];
     const expenseCategories = [
       'Food',

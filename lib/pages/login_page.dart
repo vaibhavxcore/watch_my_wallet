@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:watch_my_wallet/pages/sign_up_page.dart';
+
 import '../providers/auth_provider.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  final bool showGuestOption;
+  const LoginPage({super.key, this.showGuestOption = true});
+
   @override
   State<LoginPage> createState() => _LoginPageState();
 }
@@ -39,6 +42,10 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ),
         );
+        // If we came from AccountPage, we should pop the login page
+        if (!widget.showGuestOption) {
+          Navigator.of(context).pop();
+        }
       }
     }
   }
@@ -123,17 +130,18 @@ class _LoginPageState extends State<LoginPage> {
                 style: TextStyle(color: Colors.black),
               ),
             ),
-            TextButton(
-              onPressed: isLoading
-                  ? null
-                  : () {
-                      context.read<AuthProvider>().continueOffline();
-                    },
-              child: const Text(
-                'Continue Offline',
-                style: TextStyle(color: Colors.black),
+            if (widget.showGuestOption)
+              TextButton(
+                onPressed: isLoading
+                    ? null
+                    : () {
+                        context.read<AuthProvider>().continueOffline();
+                      },
+                child: const Text(
+                  'Continue Offline',
+                  style: TextStyle(color: Colors.black),
+                ),
               ),
-            ),
           ],
         ),
       ),

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:watch_my_wallet/data/models/local_entities.dart';
+import 'package:watch_my_wallet/pages/login_page.dart';
 import 'package:watch_my_wallet/providers/auth_provider.dart';
 import 'package:watch_my_wallet/providers/expense_provider.dart';
-import 'package:watch_my_wallet/data/models/local_entities.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
@@ -78,14 +79,14 @@ class _AccountPageState extends State<AccountPage> {
             borderRadius: BorderRadius.circular(24),
           ),
           title: const Text(
-            'Monthly Budget Goal',
+            'Monthly Spending Limit',
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                "Set the amount your budget resets to on the 1st of every month.",
+                "This is your 'Monthly Goal'. The app will warn you as you approach this spending limit.",
                 style: TextStyle(color: Colors.grey, fontSize: 13),
               ),
               const SizedBox(height: 20),
@@ -134,7 +135,7 @@ class _AccountPageState extends State<AccountPage> {
                 ),
               ),
               child: const Text(
-                'Set Goal',
+                'Set Limit',
                 style: TextStyle(color: Colors.white),
               ),
             ),
@@ -355,8 +356,12 @@ class _AccountPageState extends State<AccountPage> {
     final authProvider = context.watch<AuthProvider>();
     final expenseProvider = context.watch<ExpenseProvider>();
 
-    final userEmail = authProvider.user?.email ?? "User";
-    final userName = userEmail.split('@')[0];
+    final bool isGuest = authProvider.isGuestAuthorized;
+    final userEmail =
+        authProvider.user?.email ?? (isGuest ? "Guest Mode" : "User");
+    final userName = userEmail.contains('@')
+        ? userEmail.split('@')[0]
+        : userEmail;
 
     final defaultBudget = expenseProvider.defaultBudget;
     final savings = expenseProvider.extraIncome;
@@ -409,23 +414,45 @@ class _AccountPageState extends State<AccountPage> {
                                   letterSpacing: 1,
                                 ),
                               ),
-                              Text(
-                                userEmail,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.5),
-                                  fontSize: 13,
+                              if (userEmail.contains('@'))
+                                Text(
+                                  userEmail,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                    fontSize: 13,
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
                         ),
-                        IconButton(
-                          onPressed: _showLogoutDialog,
-                          icon: const Icon(
-                            Icons.logout_rounded,
-                            color: Colors.white60,
+                        if (isGuest)
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const LoginPage(showGuestOption: false),
+                                ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white24,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text("Sign In"),
+                          )
+                        else
+                          IconButton(
+                            onPressed: _showLogoutDialog,
+                            icon: const Icon(
+                              Icons.logout_rounded,
+                              color: Colors.white60,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -443,6 +470,7 @@ class _AccountPageState extends State<AccountPage> {
                             value: defaultBudget,
                             color: Colors.blue.shade700,
                             icon: Icons.track_changes_rounded,
+                            tooltip: "Your monthly spending limit.",
                             onTap: () => _showUpdateBudgetDialog(defaultBudget),
                           ),
                         ),
@@ -453,7 +481,18 @@ class _AccountPageState extends State<AccountPage> {
                             value: savings,
                             color: Colors.green.shade700,
                             icon: Icons.account_balance_wallet_rounded,
-                            onTap: () {},
+                            tooltip:
+                                "Net Worth: Sum of all your account balances.",
+                            onTap: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    "Total Savings represents the sum of all your account balances (Net Worth).",
+                                  ),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ],
@@ -507,11 +546,7 @@ class _AccountPageState extends State<AccountPage> {
                             onSave: (amount) => expenseProvider
                                 .setBudgetWarningThreshold(amount / 100),
                           ),
-                        ),
-                        SwitchListTile.adaptive(
-                          title: const Text('Dark theme'),
-                          value: expenseProvider.isDarkMode,
-                          onChanged: expenseProvider.setDarkMode,
+                          isLast: true,
                         ),
                       ],
                     ),
@@ -600,61 +635,7 @@ class _AccountPageState extends State<AccountPage> {
                       ),
                     ),
                   ),
-
-                //  Settings List
-                SliverPadding(
-                  padding: const EdgeInsets.all(25),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      const Text(
-                        "PREFERENCES",
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildSettingItem(
-                        icon: Icons.notifications_none_rounded,
-                        title: "Notifications",
-                        trailing: "On",
-                        color: Colors.orange,
-                      ),
-                      _buildSettingItem(
-                        icon: Icons.security_rounded,
-                        title: "Privacy & Security",
-                        trailing: "",
-                        color: Colors.blueGrey,
-                      ),
-                      const SizedBox(height: 24),
-                      const Text(
-                        "ACCOUNT",
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildSettingItem(
-                        icon: Icons.alternate_email_rounded,
-                        title: "Change Email",
-                        trailing: "",
-                        color: Colors.purple,
-                      ),
-                      _buildSettingItem(
-                        icon: Icons.delete_outline_rounded,
-                        title: "Delete Account",
-                        trailing: "",
-                        color: Colors.red,
-                        isLast: true,
-                      ),
-                    ]),
-                  ),
-                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 120)),
               ],
             ),
     );
@@ -665,6 +646,7 @@ class _AccountPageState extends State<AccountPage> {
     required double value,
     required Color color,
     required IconData icon,
+    String? tooltip,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
@@ -685,7 +667,22 @@ class _AccountPageState extends State<AccountPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: color, size: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(icon, color: color, size: 24),
+                if (tooltip != null)
+                  Tooltip(
+                    message: tooltip,
+                    triggerMode: TooltipTriggerMode.tap,
+                    child: Icon(
+                      Icons.info_outline,
+                      color: Colors.grey.shade400,
+                      size: 16,
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 15),
             Text(
               title,

@@ -23,7 +23,13 @@ class _AddRecordState extends State<AddRecord> {
   final TextEditingController attachmentController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  final ValueNotifier<String?> labelValueListenable = ValueNotifier<String?>(
+  final ValueNotifier<String?> categoryValueNotifier = ValueNotifier<String?>(
+    null,
+  );
+  final ValueNotifier<String?> accountValueNotifier = ValueNotifier<String?>(
+    null,
+  );
+  final ValueNotifier<String?> toAccountValueNotifier = ValueNotifier<String?>(
     null,
   );
 
@@ -40,6 +46,7 @@ class _AddRecordState extends State<AddRecord> {
   @override
   void initState() {
     super.initState();
+    accountValueNotifier.value = _selectedAccountId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         context.read<ExpenseProvider>().loadCategories(
@@ -51,7 +58,9 @@ class _AddRecordState extends State<AddRecord> {
 
   @override
   void dispose() {
-    labelValueListenable.dispose();
+    categoryValueNotifier.dispose();
+    accountValueNotifier.dispose();
+    toAccountValueNotifier.dispose();
     descriptionController.dispose();
     amountController.dispose();
     attachmentController.dispose();
@@ -97,7 +106,7 @@ class _AddRecordState extends State<AddRecord> {
   void _submitData() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedType != RecordType.transfer &&
-        labelValueListenable.value == null) {
+        categoryValueNotifier.value == null) {
       _showErrorSnackBar("Please select a category");
       return;
     }
@@ -189,6 +198,7 @@ class _AddRecordState extends State<AddRecord> {
               final expenseProvider = this.context.read<ExpenseProvider>();
               Navigator.pop(context);
               await expenseProvider.addTransaction(
+                toBudget: false,
                 amount: amount,
                 type: LocalTransactionType.income,
                 note: descriptionController.text,
@@ -218,6 +228,7 @@ class _AddRecordState extends State<AddRecord> {
               final expenseProvider = this.context.read<ExpenseProvider>();
               Navigator.pop(context);
               await expenseProvider.addTransaction(
+                toBudget: true,
                 amount: amount,
                 type: LocalTransactionType.income,
                 note: descriptionController.text,
@@ -266,13 +277,13 @@ class _AddRecordState extends State<AddRecord> {
         )
         .toList();
 
-    // find a fallback value if previous account selection is no longer valid or set up destination account options
     final eligibleDestinationAccounts = expenseProvider.accounts
         .where((account) => account.id != _selectedAccountId)
         .toList();
     if (_selectedToAccountId == null &&
         eligibleDestinationAccounts.isNotEmpty) {
       _selectedToAccountId = eligibleDestinationAccounts.first.id;
+      toAccountValueNotifier.value = _selectedToAccountId;
     }
 
     return Scaffold(
@@ -318,7 +329,7 @@ class _AddRecordState extends State<AddRecord> {
                       selected: {_selectedType},
                       onSelectionChanged: (val) async {
                         final selectedType = val.first;
-                        labelValueListenable.value = null;
+                        categoryValueNotifier.value = null;
                         _selectedCategoryId = null;
                         setState(() {
                           _selectedType = selectedType;
@@ -394,7 +405,7 @@ class _AddRecordState extends State<AddRecord> {
                         ),
                       ),
                       hint: const Text('Select Category'),
-                      valueListenable: labelValueListenable,
+                      valueListenable: categoryValueNotifier,
                       items: currentLabels
                           .map(
                             (item) => DropdownItem<String>(
@@ -410,7 +421,7 @@ class _AddRecordState extends State<AddRecord> {
                           )
                           .toList(),
                       onChanged: (value) {
-                        labelValueListenable.value = value;
+                        categoryValueNotifier.value = value;
                         final matchingCategories = expenseProvider.categories
                             .where((category) => category.name == value)
                             .toList();
@@ -420,6 +431,17 @@ class _AddRecordState extends State<AddRecord> {
                       },
                       validator: (value) =>
                           value == null ? 'Select category' : null,
+                      dropdownStyleData: DropdownStyleData(
+                        maxHeight: 250,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        scrollbarTheme: ScrollbarThemeData(
+                          radius: const Radius.circular(40),
+                          thickness: WidgetStateProperty.all(6),
+                          thumbVisibility: WidgetStateProperty.all(true),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 24),
                   ],
@@ -433,20 +455,22 @@ class _AddRecordState extends State<AddRecord> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedAccountId,
+                  DropdownButtonFormField2<String>(
                     isExpanded: true,
                     decoration: InputDecoration(
                       filled: true,
                       fillColor: Colors.grey[100],
+                      contentPadding: const EdgeInsets.symmetric(vertical: 4),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
                         borderSide: BorderSide.none,
                       ),
                     ),
+                    hint: const Text('Select Account'),
+                    valueListenable: accountValueNotifier,
                     items: expenseProvider.accounts
                         .map(
-                          (account) => DropdownMenuItem<String>(
+                          (account) => DropdownItem<String>(
                             value: account.id,
                             child: Text(account.name),
                           ),
@@ -456,11 +480,23 @@ class _AddRecordState extends State<AddRecord> {
                       if (value != null) {
                         setState(() {
                           _selectedAccountId = value;
-                          _selectedToAccountId =
-                              null; // force recalculation of eligible accounts
+                          _selectedToAccountId = null;
                         });
+                        accountValueNotifier.value = value;
+                        toAccountValueNotifier.value = null;
                       }
                     },
+                    dropdownStyleData: DropdownStyleData(
+                      maxHeight: 250,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      scrollbarTheme: ScrollbarThemeData(
+                        radius: const Radius.circular(40),
+                        thickness: WidgetStateProperty.all(6),
+                        thumbVisibility: WidgetStateProperty.all(true),
+                      ),
+                    ),
                   ),
                   if (_selectedType == RecordType.transfer) ...[
                     const SizedBox(height: 24),
@@ -472,20 +508,22 @@ class _AddRecordState extends State<AddRecord> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedToAccountId,
+                    DropdownButtonFormField2<String>(
                       isExpanded: true,
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: Colors.grey[100],
+                        contentPadding: const EdgeInsets.symmetric(vertical: 4),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide.none,
                         ),
                       ),
+                      hint: const Text('Select Target Account'),
+                      valueListenable: toAccountValueNotifier,
                       items: eligibleDestinationAccounts
                           .map(
-                            (account) => DropdownMenuItem<String>(
+                            (account) => DropdownItem<String>(
                               value: account.id,
                               child: Text(account.name),
                             ),
@@ -494,10 +532,22 @@ class _AddRecordState extends State<AddRecord> {
                       onChanged: (value) {
                         if (value != null) {
                           setState(() => _selectedToAccountId = value);
+                          toAccountValueNotifier.value = value;
                         }
                       },
                       validator: (value) =>
                           value == null ? 'Select target account' : null,
+                      dropdownStyleData: DropdownStyleData(
+                        maxHeight: 250,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        scrollbarTheme: ScrollbarThemeData(
+                          radius: const Radius.circular(40),
+                          thickness: WidgetStateProperty.all(6),
+                          thumbVisibility: WidgetStateProperty.all(true),
+                        ),
+                      ),
                     ),
                   ],
                   const SizedBox(height: 24),
