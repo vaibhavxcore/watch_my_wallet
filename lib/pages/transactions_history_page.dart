@@ -193,7 +193,7 @@ class _TransactionsHistoryPageState extends State<TransactionsHistoryPage> {
                             decoration: BoxDecoration(
                               color: categoryIcon
                                   .getCategoryColor(categoryName)
-                                  .withOpacity(0.1),
+                                  .withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Icon(
@@ -327,7 +327,7 @@ class _TransactionsHistoryPageState extends State<TransactionsHistoryPage> {
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: _filterCategoryId,
+                    initialValue: _filterCategoryId,
                     isExpanded: true,
                     decoration: InputDecoration(
                       filled: true,

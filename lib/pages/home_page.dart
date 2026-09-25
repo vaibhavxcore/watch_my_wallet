@@ -158,7 +158,7 @@ class _HomePageState extends State<HomePage> {
           SliverToBoxAdapter(
             child: SizedBox(
               height:
-                  520, // Increased height to ensure the floating card is fully within bounds
+                  400, 
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
@@ -256,7 +256,7 @@ class _HomePageState extends State<HomePage> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  "Goal: ₹${NumberFormat("#,##,###").format(currentBudgetLimit)}",
+                                  "Limit: ₹${NumberFormat("#,##,###").format(currentBudgetLimit)}",
                                   style: TextStyle(
                                     color: Colors.grey.shade600,
                                     fontSize: 11,

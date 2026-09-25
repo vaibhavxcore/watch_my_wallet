@@ -7,84 +7,53 @@ import 'package:watch_my_wallet/providers/auth_provider.dart';
 import 'package:watch_my_wallet/providers/expense_provider.dart';
 import 'package:watch_my_wallet/screens/splash_screen.dart';
 
-Future<void> main() async {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await Supabase.initialize(
     url: 'https://ogszlpztuzbiynfpaawl.supabase.co',
     publishableKey: 'sb_publishable_ZPInXnFqS3L59Lv1bJpHqA_B_Qx85pv',
   );
-
   runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
-
   @override
   State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
-  late final Future<LocalDatabase> _localDatabase = _initDatabase();
-
-  Future<LocalDatabase> _initDatabase() async {
-    final key = await SecurityManager.getDatabaseKey();
-    return LocalDatabase.open(key: key);
-  }
+  late final _dbFuture = SecurityManager.getDatabaseKey().then(
+    (k) => LocalDatabase.open(key: k),
+  );
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<LocalDatabase>(
-      future: _localDatabase,
+      future: _dbFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return _buildLoadingApp();
+        // While database is loading, show splash screen
+        if (!snapshot.hasData) {
+          return const MaterialApp(
+            debugShowCheckedModeBanner: false,
+            home: SplashScreen(),
+          );
         }
-        if (snapshot.hasError) {
-          return _buildErrorApp(snapshot.error.toString());
-        }
-
-        final localDatabase = snapshot.data!;
         return MultiProvider(
           providers: [
             ChangeNotifierProvider(create: (_) => AuthProvider()..initialize()),
             ChangeNotifierProvider(
-              create: (_) => ExpenseProvider(localDatabase)..initialize(),
+              create: (_) => ExpenseProvider(snapshot.data!)..initialize(),
             ),
           ],
-          child: Builder(builder: (context) => _buildApp(context)),
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'Watch My Wallet',
+            theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.teal),
+            home: const SplashScreen(),
+          ),
         );
       },
-    );
-  }
-
-  Widget _buildApp(BuildContext context) {
-    final expenseProvider = context.watch<ExpenseProvider>();
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Watch My Wallet',
-      theme: ThemeData(useMaterial3: true, primarySwatch: Colors.blue),
-      darkTheme: ThemeData.dark(useMaterial3: true),
-      themeMode: expenseProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: const SplashScreen(),
-    );
-  }
-
-  Widget _buildLoadingApp() {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Watch My Wallet',
-      theme: ThemeData(useMaterial3: true, primarySwatch: Colors.blue),
-      home: const Scaffold(body: Center(child: FlutterLogo(size: 100))),
-    );
-  }
-
-  Widget _buildErrorApp(String error) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Watch My Wallet',
-      home: Scaffold(body: Center(child: Text('Local storage failed: $error'))),
     );
   }
 }

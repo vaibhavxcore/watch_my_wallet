@@ -21,7 +21,6 @@ class ExpenseProvider extends ChangeNotifier {
   Map<String, double> _categoryBudgets = {};
   Map<String, double> _accountBalances = {};
   List<LocalSavingsGoal> _savingsGoals = [];
-  bool _isDarkMode = false;
   double _budgetWarningThreshold = 0.8;
   bool _isLoading = false;
   String? _error;
@@ -37,7 +36,6 @@ class ExpenseProvider extends ChangeNotifier {
   Map<String, double> get categoryBudgets => Map.unmodifiable(_categoryBudgets);
   Map<String, double> get accountBalances => Map.unmodifiable(_accountBalances);
   List<LocalSavingsGoal> get savingsGoals => List.unmodifiable(_savingsGoals);
-  bool get isDarkMode => _isDarkMode;
   double get budgetWarningThreshold => _budgetWarningThreshold;
   bool get isBudgetWarning =>
       _budget > 0 && budgetProgress >= _budgetWarningThreshold;
@@ -180,7 +178,6 @@ class ExpenseProvider extends ChangeNotifier {
         userId: _currentUserId,
       );
       _savingsGoals = await _repository.getSavingsGoals(userId: _currentUserId);
-      _isDarkMode = (await _repository.getSetting('theme_mode')) == 'dark';
       final threshold = double.tryParse(
         await _repository.getSetting('budget_warning_threshold') ?? '',
       );
@@ -371,7 +368,6 @@ class ExpenseProvider extends ChangeNotifier {
 
   Future<void> setDarkMode(bool value) async {
     await _repository.saveSetting('theme_mode', value ? 'dark' : 'light');
-    _isDarkMode = value;
     notifyListeners();
   }
 
