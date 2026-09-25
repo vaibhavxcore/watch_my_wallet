@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:watch_my_wallet/core/utils/category_icons_data.dart';
 import 'package:watch_my_wallet/data/models/local_entities.dart';
 import 'package:watch_my_wallet/providers/expense_provider.dart';
+import 'package:watch_my_wallet/widgets/transaction_action_dialogs.dart';
 
 class TransactionsHistoryPage extends StatefulWidget {
   const TransactionsHistoryPage({super.key});
@@ -177,51 +178,76 @@ class _TransactionsHistoryPageState extends State<TransactionsHistoryPage> {
                       );
                       final isIncome = tx.type == LocalTransactionType.income;
 
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
+                      return Dismissible(
+                        key: ValueKey(tx.id),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 24),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade700,
+                            borderRadius: BorderRadius.circular(20),
                           ),
-                          leading: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: categoryIcon
-                                  .getCategoryColor(categoryName)
-                                  .withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
+                          child: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.white,
+                            size: 26,
+                          ),
+                        ),
+                        onDismissed: (_) =>
+                            TransactionActions.deleteWithUndo(context, tx),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: ListTile(
+                            onTap: () =>
+                                TransactionDetailsDialog.show(context, tx),
+                            onLongPress: () =>
+                                TransactionActions.confirmDelete(context, tx),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
                             ),
-                            child: Icon(
-                              categoryIcon.getCategoryIcon(categoryName),
-                              color: categoryIcon.getCategoryColor(
-                                categoryName,
+                            leading: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: categoryIcon
+                                    .getCategoryColor(categoryName)
+                                    .withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                categoryIcon.getCategoryIcon(categoryName),
+                                color: categoryIcon.getCategoryColor(
+                                  categoryName,
+                                ),
                               ),
                             ),
-                          ),
-                          title: Text(
-                            tx.note,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Text(
-                            "${DateFormat('MMM dd').format(tx.date)} • ${expenseProvider.accountName(tx.accountId)}",
-                            style: TextStyle(
-                              color: Colors.grey.shade600,
-                              fontSize: 12,
+                            title: Text(
+                              tx.note,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold),
                             ),
-                          ),
-                          trailing: Text(
-                            "${isIncome ? '+' : '-'} ₹${NumberFormat("#,##,###.##").format(tx.amount)}",
-                            style: TextStyle(
-                              color: isIncome
-                                  ? Colors.green.shade700
-                                  : Colors.red.shade700,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 16,
+                            subtitle: Text(
+                              "${DateFormat('MMM dd').format(tx.date)} • ${expenseProvider.accountName(tx.accountId)}",
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 12,
+                              ),
+                            ),
+                            trailing: Text(
+                              "${isIncome ? '+' : '-'} ₹${NumberFormat("#,##,###.##").format(tx.amount)}",
+                              style: TextStyle(
+                                color: isIncome
+                                    ? Colors.green.shade700
+                                    : Colors.red.shade700,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                              ),
                             ),
                           ),
                         ),

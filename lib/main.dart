@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:watch_my_wallet/data/local/local_database.dart';
 import 'package:watch_my_wallet/data/local/security_manager.dart';
+import 'package:watch_my_wallet/data/local/sync_service.dart';
+import 'package:watch_my_wallet/data/repositories/supabase_repository.dart';
 import 'package:watch_my_wallet/providers/auth_provider.dart';
 import 'package:watch_my_wallet/providers/expense_provider.dart';
 import 'package:watch_my_wallet/screens/splash_screen.dart';
@@ -39,11 +41,18 @@ class _MyAppState extends State<MyApp> {
             home: SplashScreen(),
           );
         }
+        final db = snapshot.data!;
+        final supabaseRepo = SupabaseRepository();
+
         return MultiProvider(
           providers: [
+            Provider<SupabaseRepository>.value(value: supabaseRepo),
             ChangeNotifierProvider(create: (_) => AuthProvider()..initialize()),
             ChangeNotifierProvider(
-              create: (_) => ExpenseProvider(snapshot.data!)..initialize(),
+              create: (_) => ExpenseProvider(db)..initialize(),
+            ),
+            ChangeNotifierProvider(
+              create: (_) => SyncService(db, supabaseRepo)..initialize(),
             ),
           ],
           child: MaterialApp(

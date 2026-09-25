@@ -3,7 +3,7 @@ import 'package:sqflite_sqlcipher/sqflite.dart';
 
 class LocalDatabase {
   static const databaseName = 'watch_my_wallet.db';
-  static const databaseVersion = 3;
+  static const databaseVersion = 5;
 
   final Database database;
 
@@ -23,7 +23,7 @@ class LocalDatabase {
         await _seedDefaults(database);
       },
       onUpgrade: (database, oldVersion, newVersion) async {
-        if (oldVersion < 3) {
+        if (oldVersion < 5) {
           // clear or re-create schema for simplicity in local dev setup
           await _dropTables(database);
           await _createSchema(database);
@@ -194,6 +194,7 @@ class LocalDatabase {
 
   static Future<void> _seedDefaults(DatabaseExecutor database) async {
     final now = DateTime.now().toUtc().toIso8601String();
+
     const accounts = [
       ['account_cash', 'Cash'],
       ['account_bank', 'Bank Account'],
@@ -228,7 +229,8 @@ class LocalDatabase {
         'name': account[1],
         'created_at': now,
         'updated_at': now,
-      });
+        'sync_status': 'synced',
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
     for (final category in expenseCategories) {
       await database.insert('categories', {
@@ -238,7 +240,8 @@ class LocalDatabase {
         'is_default': 1,
         'created_at': now,
         'updated_at': now,
-      });
+        'sync_status': 'synced',
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
     for (final category in incomeCategories) {
       await database.insert('categories', {
@@ -248,9 +251,9 @@ class LocalDatabase {
         'is_default': 1,
         'created_at': now,
         'updated_at': now,
-      });
+        'sync_status': 'synced',
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
-    // Add default Transfer category
     await database.insert('categories', {
       'id': 'category_transfer_default',
       'name': 'Transfer',
@@ -258,41 +261,17 @@ class LocalDatabase {
       'is_default': 1,
       'created_at': now,
       'updated_at': now,
-    });
+      'sync_status': 'synced',
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
 
     await database.insert('app_settings', {
       'key': 'base_currency',
       'value': 'INR',
       'updated_at': now,
-    });
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
     await database.insert('sync_metadata', {
       'key': 'last_sync_at',
       'value': '',
-    });
-  }
-
-  static Future<void> _addDefaultCategory(
-    DatabaseExecutor database,
-    String name,
-    String type,
-  ) async {
-    final existing = await database.query(
-      'categories',
-      columns: ['id'],
-      where: 'id = ?',
-      whereArgs: ['category_${type}_$name'.toLowerCase()],
-      limit: 1,
-    );
-    if (existing.isNotEmpty) return;
-
-    final now = DateTime.now().toUtc().toIso8601String();
-    await database.insert('categories', {
-      'id': 'category_${type}_$name'.toLowerCase(),
-      'name': name,
-      'type': type,
-      'is_default': 1,
-      'created_at': now,
-      'updated_at': now,
-    });
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 }

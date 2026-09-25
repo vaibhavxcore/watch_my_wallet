@@ -34,7 +34,7 @@ class _AddRecordState extends State<AddRecord> {
   );
 
   RecordType _selectedType = RecordType.expense;
-  String _selectedAccountId = 'account_cash';
+  String? _selectedAccountId;
   String? _selectedToAccountId;
   String? _selectedCategoryId;
   DateTime _selectedDate = DateTime.now();
@@ -47,11 +47,13 @@ class _AddRecordState extends State<AddRecord> {
   void initState() {
     super.initState();
     accountValueNotifier.value = _selectedAccountId;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
-        context.read<ExpenseProvider>().loadCategories(
-          LocalTransactionType.expense,
-        );
+        final provider = context.read<ExpenseProvider>();
+        if (provider.accounts.isEmpty) {
+          await provider.initialize(showLoader: false);
+        }
+        await provider.loadCategories(LocalTransactionType.expense);
       }
     });
   }
@@ -68,6 +70,7 @@ class _AddRecordState extends State<AddRecord> {
   }
 
   void _showErrorSnackBar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -96,7 +99,7 @@ class _AddRecordState extends State<AddRecord> {
         );
       },
     );
-    if (picked != null && picked != _selectedDate) {
+    if (picked != null && picked != _selectedDate && mounted) {
       setState(() {
         _selectedDate = picked;
       });
@@ -105,6 +108,10 @@ class _AddRecordState extends State<AddRecord> {
 
   void _submitData() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_selectedAccountId == null) {
+      _showErrorSnackBar("Please select an account");
+      return;
+    }
     if (_selectedType != RecordType.transfer &&
         categoryValueNotifier.value == null) {
       _showErrorSnackBar("Please select a category");
@@ -115,18 +122,36 @@ class _AddRecordState extends State<AddRecord> {
       _showErrorSnackBar("Source and Destination accounts cannot be the same");
       return;
     }
+    if (_selectedType == RecordType.transfer && _selectedToAccountId == null) {
+      _showErrorSnackBar("Please select a destination account");
+      return;
+    }
+    if (_selectedType != RecordType.transfer && _selectedCategoryId == null) {
+      _showErrorSnackBar("Please select a valid category");
+      return;
+    }
 
     final expenseProvider = context.read<ExpenseProvider>();
 
     try {
-      final amount = double.parse(amountController.text);
+      final amount = double.tryParse(amountController.text) ?? 0.0;
+      if (amount <= 0) {
+        _showErrorSnackBar("Please enter a valid amount greater than 0");
+        return;
+      }
+
       if (_selectedType == RecordType.income) {
         _showIncomeDialog(
           amount,
-          accountId: _selectedAccountId,
-          categoryId: _selectedCategoryId,
+          accountId: _selectedAccountId!,
+          categoryId: _selectedCategoryId!,
         );
       } else if (_selectedType == RecordType.transfer) {
+        final toAccount = _selectedToAccountId;
+        if (toAccount == null) {
+          _showErrorSnackBar("Please select a destination account");
+          return;
+        }
         await expenseProvider.addTransaction(
           amount: amount,
           type: LocalTransactionType.transfer,
@@ -140,16 +165,22 @@ class _AddRecordState extends State<AddRecord> {
               : attachmentController.text.trim(),
           isRecurring: _isRecurring,
           frequency: _recurringFrequency,
-          accountId: _selectedAccountId,
-          toAccountId: _selectedToAccountId!,
+          accountId: _selectedAccountId!,
+          toAccountId: toAccount,
           categoryId: 'category_transfer_default',
         );
+        if (!mounted) return;
         if (expenseProvider.error != null) {
           _showErrorSnackBar(expenseProvider.error!);
-        } else if (mounted) {
+        } else {
           Navigator.pop(context);
         }
       } else {
+        final categoryId = _selectedCategoryId;
+        if (categoryId == null) {
+          _showErrorSnackBar("Please select a valid category");
+          return;
+        }
         await expenseProvider.addTransaction(
           amount: amount,
           type: LocalTransactionType.expense,
@@ -161,12 +192,13 @@ class _AddRecordState extends State<AddRecord> {
               : attachmentController.text.trim(),
           isRecurring: _isRecurring,
           frequency: _recurringFrequency,
-          accountId: _selectedAccountId,
-          categoryId: _selectedCategoryId!,
+          accountId: _selectedAccountId!,
+          categoryId: categoryId,
         );
+        if (!mounted) return;
         if (expenseProvider.error != null) {
           _showErrorSnackBar(expenseProvider.error!);
-        } else if (mounted) {
+        } else {
           Navigator.pop(context);
         }
       }
@@ -178,12 +210,12 @@ class _AddRecordState extends State<AddRecord> {
   void _showIncomeDialog(
     double amount, {
     required String accountId,
-    required String? categoryId,
+    required String categoryId,
   }) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text(
           "Income Strategy",
@@ -195,27 +227,29 @@ class _AddRecordState extends State<AddRecord> {
         actions: [
           TextButton(
             onPressed: () async {
-              final expenseProvider = this.context.read<ExpenseProvider>();
-              Navigator.pop(context);
+              if (!mounted) return;
+              final expenseProvider = context.read<ExpenseProvider>();
+              Navigator.pop(dialogContext);
               await expenseProvider.addTransaction(
                 toBudget: false,
                 amount: amount,
                 type: LocalTransactionType.income,
                 note: descriptionController.text,
                 date: _selectedDate,
-                time: _selectedTime?.format(this.context),
+                time: _selectedTime?.format(context),
                 attachmentPath: attachmentController.text.trim().isEmpty
                     ? null
                     : attachmentController.text.trim(),
                 isRecurring: _isRecurring,
                 frequency: _recurringFrequency,
                 accountId: accountId,
-                categoryId: categoryId!,
+                categoryId: categoryId,
               );
+              if (!mounted) return;
               if (expenseProvider.error != null) {
                 _showErrorSnackBar(expenseProvider.error!);
-              } else if (mounted) {
-                Navigator.pop(this.context);
+              } else {
+                Navigator.pop(context);
               }
             },
             child: const Text(
@@ -225,27 +259,29 @@ class _AddRecordState extends State<AddRecord> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final expenseProvider = this.context.read<ExpenseProvider>();
-              Navigator.pop(context);
+              if (!mounted) return;
+              final expenseProvider = context.read<ExpenseProvider>();
+              Navigator.pop(dialogContext);
               await expenseProvider.addTransaction(
                 toBudget: true,
                 amount: amount,
                 type: LocalTransactionType.income,
                 note: descriptionController.text,
                 date: _selectedDate,
-                time: _selectedTime?.format(this.context),
+                time: _selectedTime?.format(context),
                 attachmentPath: attachmentController.text.trim().isEmpty
                     ? null
                     : attachmentController.text.trim(),
                 isRecurring: _isRecurring,
                 frequency: _recurringFrequency,
                 accountId: accountId,
-                categoryId: categoryId!,
+                categoryId: categoryId,
               );
+              if (!mounted) return;
               if (expenseProvider.error != null) {
                 _showErrorSnackBar(expenseProvider.error!);
-              } else if (mounted) {
-                Navigator.pop(this.context);
+              } else {
+                Navigator.pop(context);
               }
             },
             style: ElevatedButton.styleFrom(
@@ -268,6 +304,19 @@ class _AddRecordState extends State<AddRecord> {
   Widget build(BuildContext context) {
     final expenseProvider = context.watch<ExpenseProvider>();
     final isLoading = expenseProvider.isLoading;
+
+    if (expenseProvider.accounts.isNotEmpty &&
+        !expenseProvider.accounts.any(
+          (account) => account.id == _selectedAccountId,
+        )) {
+      final cashAccount = expenseProvider.accounts.firstWhere(
+        (account) => account.name.toLowerCase().contains('cash'),
+        orElse: () => expenseProvider.accounts.first,
+      );
+      _selectedAccountId = cashAccount.id;
+      accountValueNotifier.value = _selectedAccountId;
+    }
+
     final currentLabels = expenseProvider.categories
         .map(
           (category) => <String, dynamic>{
@@ -380,7 +429,7 @@ class _AddRecordState extends State<AddRecord> {
                       border: InputBorder.none,
                     ),
                     validator: (value) =>
-                        value!.isEmpty ? 'Enter amount' : null,
+                        value == null || value.isEmpty ? 'Enter amount' : null,
                   ),
                   const Divider(),
                   const SizedBox(height: 24),
@@ -486,6 +535,8 @@ class _AddRecordState extends State<AddRecord> {
                         toAccountValueNotifier.value = null;
                       }
                     },
+                    validator: (value) =>
+                        value == null ? 'Select account' : null,
                     dropdownStyleData: DropdownStyleData(
                       maxHeight: 250,
                       decoration: BoxDecoration(
@@ -635,7 +686,7 @@ class _AddRecordState extends State<AddRecord> {
                         ),
                       ],
                       onChanged: (value) {
-                        if (value != null) {
+                        if (value != null && mounted) {
                           setState(() => _recurringFrequency = value);
                         }
                       },
@@ -686,7 +737,8 @@ class _AddRecordState extends State<AddRecord> {
                       ),
                     ),
                     validator: (value) =>
-                        _selectedType != RecordType.transfer && value!.isEmpty
+                        _selectedType != RecordType.transfer &&
+                            (value == null || value.isEmpty)
                         ? 'Enter description'
                         : null,
                   ),

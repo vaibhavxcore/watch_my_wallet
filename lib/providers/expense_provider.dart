@@ -24,6 +24,7 @@ class ExpenseProvider extends ChangeNotifier {
   double _budgetWarningThreshold = 0.8;
   bool _isLoading = false;
   String? _error;
+  bool _isDisposed = false;
 
   // Getters
   List<LocalTransaction> get transactions => List.unmodifiable(_transactions);
@@ -107,29 +108,49 @@ class ExpenseProvider extends ChangeNotifier {
   ExpenseProvider(LocalDatabase database)
     : _repository = TransactionRepository(database);
 
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    if (_isDisposed) return;
+    super.notifyListeners();
+  }
+
   Future<void> setUserId(String userId, {bool migrateGuest = false}) async {
     if (migrateGuest && _currentUserId == 'guest' && userId != 'guest') {
+      _isLoading = true;
+      notifyListeners();
       await _repository.migrateGuestData(userId);
     }
     _currentUserId = userId;
-    await initialize();
+    await initialize(showLoader: migrateGuest);
   }
 
-  Future<void> initialize() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+  Future<void> initialize({bool showLoader = true}) async {
+    if (_isDisposed) return;
+    if (showLoader) {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+    }
 
     try {
       await _repository.processRecurringTransactions(userId: _currentUserId);
 
-      // Seed default accounts and categories for guest or real user if none exist yet
-      final existingAccounts = await _repository.getAccounts(
-        userId: _currentUserId,
-      );
-      if (existingAccounts.isEmpty) {
+      // Seed default accounts if none exist for the current user
+      _accounts = await _repository.getAccounts(userId: _currentUserId);
+      if (_accounts.isEmpty) {
+        // Automatically seed default accounts (Bank Account, Cash, Saving)
         await _repository.seedDefaultAccounts(_currentUserId);
+        // Refresh accounts list after seeding
+        _accounts = await _repository.getAccounts(userId: _currentUserId);
       }
+
+      // Seed default categories if none exist for the current user
       final existingExpenseCategories = await _repository.getCategories(
         type: LocalTransactionType.expense,
         userId: _currentUserId,
@@ -139,6 +160,7 @@ class ExpenseProvider extends ChangeNotifier {
       }
 
       final localRecords = await _repository.getAll(userId: _currentUserId);
+      if (_isDisposed) return;
       _localTransactions
         ..clear()
         ..addEntries(
@@ -146,8 +168,9 @@ class ExpenseProvider extends ChangeNotifier {
             (transaction) => MapEntry(transaction.id, transaction),
           ),
         );
-      _accounts = await _repository.getAccounts(userId: _currentUserId);
+
       _rememberAccountNames(_accounts);
+
       _categories = await _repository.getCategories(
         type: LocalTransactionType.expense,
         userId: _currentUserId,
@@ -165,29 +188,38 @@ class ExpenseProvider extends ChangeNotifier {
           userId: _currentUserId,
         ),
       );
+
       final budget = await _repository.getBudget(userId: _currentUserId);
       _budget = budget?.amount ?? 0;
       _defaultBudget = _budget;
+
       final categoryBudgets = await _repository.getCategoryBudgets(
         userId: _currentUserId,
       );
       _categoryBudgets = {
         for (final item in categoryBudgets) item.categoryId: item.amount,
       };
+
       _accountBalances = await _repository.getAccountBalances(
         userId: _currentUserId,
       );
+
       _savingsGoals = await _repository.getSavingsGoals(userId: _currentUserId);
-      final threshold = double.tryParse(
-        await _repository.getSetting('budget_warning_threshold') ?? '',
+
+      final thresholdStr = await _repository.getSetting(
+        'budget_warning_threshold',
       );
+      final threshold = double.tryParse(thresholdStr ?? '');
       _budgetWarningThreshold = threshold ?? 0.8;
+
       _transactions = localRecords;
       _error = null;
     } catch (e) {
       _error = _handleError(e);
     } finally {
-      _isLoading = false;
+      if (showLoader) {
+        _isLoading = false;
+      }
       notifyListeners();
     }
   }
@@ -197,6 +229,13 @@ class ExpenseProvider extends ChangeNotifier {
       type: type,
       userId: _currentUserId,
     );
+    if (_categories.isEmpty) {
+      await _repository.seedDefaultCategories(_currentUserId);
+      _categories = await _repository.getCategories(
+        type: type,
+        userId: _currentUserId,
+      );
+    }
     _rememberCategoryNames(_categories);
     notifyListeners();
   }
@@ -216,7 +255,6 @@ class ExpenseProvider extends ChangeNotifier {
     String frequency = 'monthly',
   }) async {
     _isLoading = true;
-    _error = null;
     notifyListeners();
 
     try {
@@ -234,6 +272,7 @@ class ExpenseProvider extends ChangeNotifier {
         isRecurring: isRecurring,
         frequency: frequency,
       );
+      if (_isDisposed) return;
       _localTransactions[transaction.id] = transaction;
 
       if (toBudget && type == LocalTransactionType.income) {
@@ -373,7 +412,7 @@ class ExpenseProvider extends ChangeNotifier {
 
   Future<void> processRecurringTransactions() async {
     await _repository.processRecurringTransactions(userId: _currentUserId);
-    await initialize();
+    await initialize(showLoader: false);
   }
 
   Future<LocalTransaction?> deleteTransaction(
@@ -390,11 +429,13 @@ class ExpenseProvider extends ChangeNotifier {
     _error = null;
     try {
       await _repository.softDelete(existing);
+      if (_isDisposed) return existing;
       _accountBalances = await _repository.getAccountBalances(
         userId: _currentUserId,
       );
       return existing;
     } catch (e) {
+      if (_isDisposed) return existing;
       _localTransactions[id] = existing;
       _transactions = [..._transactions, existing]
         ..sort((a, b) => b.date.compareTo(a.date));
@@ -406,11 +447,18 @@ class ExpenseProvider extends ChangeNotifier {
 
   Future<void> restoreTransaction(LocalTransaction transaction) async {
     final restored = await _repository.update(
-      transaction.copyWith(deletedAt: null),
+      transaction.copyWith(
+        clearDeletedAt: true,
+        syncStatus: SyncStatus.pendingUpdate,
+      ),
     );
+    if (_isDisposed) return;
     _localTransactions[restored.id] = restored;
     _transactions = [..._transactions, restored]
       ..sort((a, b) => b.date.compareTo(a.date));
+    _accountBalances = await _repository.getAccountBalances(
+      userId: _currentUserId,
+    );
     notifyListeners();
   }
 
@@ -446,6 +494,7 @@ class ExpenseProvider extends ChangeNotifier {
           syncStatus: existing.syncStatus,
         ),
       );
+      if (_isDisposed) return;
       _localTransactions[updated.id] = updated;
       final index = _transactions.indexWhere((item) => item.id == updated.id);
       if (index != -1) {
@@ -479,6 +528,11 @@ class ExpenseProvider extends ChangeNotifier {
 
   Future<void> _refreshAccounts() async {
     _accounts = await _repository.getAccounts(userId: _currentUserId);
+    if (_accounts.isEmpty) {
+      await _repository.seedDefaultAccounts(_currentUserId);
+      _accounts = await _repository.getAccounts(userId: _currentUserId);
+    }
+    if (_isDisposed) return;
     _rememberAccountNames(_accounts);
     _accountBalances = await _repository.getAccountBalances(
       userId: _currentUserId,

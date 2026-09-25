@@ -12,6 +12,7 @@ class SignUpPage extends StatefulWidget {
 
 class _SignUpPageState extends State<SignUpPage> {
   final _formKey = GlobalKey<FormState>();
+  final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -19,6 +20,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
   @override
   void dispose() {
+    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -34,6 +36,7 @@ class _SignUpPageState extends State<SignUpPage> {
     await authProvider.signUp(
       _emailController.text.trim(),
       _passwordController.text.trim(),
+      _usernameController.text.trim(),
     );
 
     if (authProvider.error != null) {
@@ -41,7 +44,6 @@ class _SignUpPageState extends State<SignUpPage> {
         messenger.showSnackBar(SnackBar(content: Text(authProvider.error!)));
       }
     } else {
-      // Sign out after sign up to force user to log in as per previous logic
       await authProvider.signOut();
       if (mounted) {
         Navigator.of(context).pop();
@@ -68,6 +70,27 @@ class _SignUpPageState extends State<SignUpPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 20),
+                TextFormField(
+                  controller: _usernameController,
+                  cursorColor: Colors.black,
+                  decoration: InputDecoration(
+                    hintText: 'Username',
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: const BorderSide(color: Colors.black),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Username is required';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,

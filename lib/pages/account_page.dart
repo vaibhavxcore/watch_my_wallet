@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:watch_my_wallet/data/local/sync_service.dart';
 import 'package:watch_my_wallet/data/models/local_entities.dart';
 import 'package:watch_my_wallet/pages/login_page.dart';
 import 'package:watch_my_wallet/providers/auth_provider.dart';
@@ -355,13 +356,14 @@ class _AccountPageState extends State<AccountPage> {
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
     final expenseProvider = context.watch<ExpenseProvider>();
+    final syncService = context.watch<SyncService>();
 
     final bool isGuest = authProvider.isGuestAuthorized;
     final userEmail =
         authProvider.user?.email ?? (isGuest ? "Guest Mode" : "User");
-    final userName = userEmail.contains('@')
-        ? userEmail.split('@')[0]
-        : userEmail;
+    final userName =
+        authProvider.username ??
+        (userEmail.contains('@') ? userEmail.split('@')[0] : userEmail);
 
     final defaultBudget = expenseProvider.defaultBudget;
     final savings = expenseProvider.extraIncome;
@@ -505,6 +507,24 @@ class _AccountPageState extends State<AccountPage> {
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
                     child: Column(
                       children: [
+                        if (authProvider.user != null)
+                          _buildSettingItem(
+                            icon: syncService.isSyncing
+                                ? Icons.sync
+                                : Icons.cloud_upload_outlined,
+                            title: syncService.isSyncing
+                                ? 'Syncing data...'
+                                : 'Sync with cloud',
+                            trailing: syncService.lastSyncAt != null
+                                ? DateFormat(
+                                    'HH:mm',
+                                  ).format(syncService.lastSyncAt!)
+                                : '',
+                            color: Colors.blue,
+                            onTap: syncService.isSyncing
+                                ? null
+                                : () => syncService.sync(),
+                          ),
                         _buildSettingItem(
                           icon: Icons.category_outlined,
                           title: 'Add custom category',
@@ -929,9 +949,9 @@ class _AccountPageState extends State<AccountPage> {
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
               } on StateError catch (error) {
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(error.message.toString())),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(error.message)));
               }
             },
             style: FilledButton.styleFrom(backgroundColor: Colors.red),

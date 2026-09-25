@@ -1,14 +1,14 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:page_transition/page_transition.dart';
 import 'package:provider/provider.dart';
 import 'package:watch_my_wallet/core/utils/category_icons_data.dart';
+import 'package:watch_my_wallet/data/local/sync_service.dart';
 import 'package:watch_my_wallet/data/models/local_entities.dart';
 import 'package:watch_my_wallet/pages/add_record.dart';
 import 'package:watch_my_wallet/pages/transactions_history_page.dart';
 import 'package:watch_my_wallet/providers/auth_provider.dart';
+import 'package:watch_my_wallet/widgets/transaction_action_dialogs.dart';
 
 import '../providers/expense_provider.dart';
 
@@ -90,8 +90,10 @@ class _HomePageState extends State<HomePage> {
               onPressed: () async {
                 final amount = double.tryParse(_budgetController.text) ?? 0.0;
                 await provider.updateBudgetGoal(amount);
-                if (mounted) {
+                if (dialogContext.mounted) {
                   Navigator.pop(dialogContext);
+                }
+                if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
@@ -125,9 +127,10 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final expenseProvider = context.watch<ExpenseProvider>();
     final authProvider = context.watch<AuthProvider>();
+    context.watch<SyncService>();
 
-    final userEmail = authProvider.user?.email ?? "Guest User";
-    final userName = userEmail.split('@')[0];
+    final userEmail = authProvider.user?.email ?? "User";
+    final userName = authProvider.username ?? userEmail.split('@')[0];
 
     final transactions = expenseProvider.transactions;
     final recentTransactions = transactions.take(5).toList();
@@ -552,98 +555,122 @@ class _HomePageState extends State<HomePage> {
                         'MMM dd, yyyy',
                       ).format(rec.date);
 
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.02),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
+                      return Dismissible(
+                        key: ValueKey(rec.id),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 24),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade700,
                             borderRadius: BorderRadius.circular(24),
-                            onTap: () => _showTransactionDetails(context, rec),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: categoryIcon
-                                          .getCategoryColor(categoryName)
-                                          .withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(18),
-                                    ),
-                                    child: Icon(
-                                      categoryIcon.getCategoryIcon(
-                                        categoryName,
+                          ),
+                          child: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                        onDismissed: (_) =>
+                            TransactionActions.deleteWithUndo(context, rec),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(24),
+                              onTap: () =>
+                                  TransactionDetailsDialog.show(context, rec),
+                              onLongPress: () =>
+                                  TransactionActions.confirmDelete(context, rec),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: categoryIcon
+                                            .getCategoryColor(categoryName)
+                                            .withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(18),
                                       ),
-                                      color: categoryIcon.getCategoryColor(
-                                        categoryName,
+                                      child: Icon(
+                                        categoryIcon.getCategoryIcon(
+                                          categoryName,
+                                        ),
+                                        color: categoryIcon.getCategoryColor(
+                                          categoryName,
+                                        ),
+                                        size: 26,
                                       ),
-                                      size: 26,
                                     ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            rec.note,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 17,
+                                              color: Color(0xFF1A1D1E),
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            categoryName,
+                                            style: TextStyle(
+                                              color: Colors.grey.shade500,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Column(
                                       crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                          CrossAxisAlignment.end,
                                       children: [
                                         Text(
-                                          rec.note,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w800,
+                                          "${isIncome ? '+' : '-'} ₹${NumberFormat("#,##,###.##").format(rec.amount)}",
+                                          style: TextStyle(
+                                            color: isIncome
+                                                ? Colors.green.shade700
+                                                : Colors.red.shade700,
+                                            fontWeight: FontWeight.w900,
                                             fontSize: 17,
-                                            color: Color(0xFF1A1D1E),
                                           ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          categoryName,
+                                          dateFormatted,
                                           style: TextStyle(
-                                            color: Colors.grey.shade500,
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
+                                            color: Colors.grey.shade400,
+                                            fontSize: 12,
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        "${isIncome ? '+' : '-'} ₹${NumberFormat("#,##,###.##").format(rec.amount)}",
-                                        style: TextStyle(
-                                          color: isIncome
-                                              ? Colors.green.shade700
-                                              : Colors.red.shade700,
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 17,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        dateFormatted,
-                                        style: TextStyle(
-                                          color: Colors.grey.shade400,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -653,70 +680,6 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
           const SliverToBoxAdapter(child: SizedBox(height: 120)),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showTransactionDetails(
-    BuildContext context,
-    LocalTransaction transaction,
-  ) async {
-    final provider = context.read<ExpenseProvider>();
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text(
-          provider.categoryName(transaction.categoryId),
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(transaction.note, style: const TextStyle(fontSize: 16)),
-            const SizedBox(height: 16),
-            _detailRow("Amount", "₹${transaction.amount.toStringAsFixed(2)}"),
-            _detailRow("Account", provider.accountName(transaction.accountId)),
-            _detailRow("Date", DateFormat.yMMMd().format(transaction.date)),
-            if (transaction.isRecurring)
-              const Padding(
-                padding: EdgeInsets.only(top: 8.0),
-                child: Text(
-                  "Recurring transaction",
-                  style: TextStyle(
-                    color: Colors.blue,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Close', style: TextStyle(color: Colors.black)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _detailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.grey,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
         ],
       ),
     );

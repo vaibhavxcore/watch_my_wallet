@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:watch_my_wallet/data/local/sync_service.dart';
 import 'package:watch_my_wallet/pages/main_layout.dart';
 import 'package:watch_my_wallet/providers/auth_provider.dart';
 import 'package:watch_my_wallet/providers/expense_provider.dart';
@@ -30,20 +31,32 @@ class _AuthGateState extends State<AuthGate> {
     final user = authProvider.user;
     final isGuest = authProvider.isGuestAuthorized;
 
-    // Determine what the target user ID should be in the ExpenseProvider
-    final String targetId = user?.id ?? 'guest';
+    final String targetId = user?.id ?? (isGuest ? 'guest' : 'unauthenticated');
 
-    // sync ExpenseProvider user id whenever Auth state or guest Status changes
-    if (targetId != _lastBoundUserId) {
+    if (targetId != 'unauthenticated' && targetId != _lastBoundUserId) {
       _lastBoundUserId = targetId;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // If we have a real user, we migrate guest data if they were just a guest
+        if (!mounted) return;
+
         final migrate = user != null;
-        context.read<ExpenseProvider>().setUserId(
-          targetId,
-          migrateGuest: migrate,
-        );
+        final expenseProvider = context.read<ExpenseProvider>();
+        final syncService = context.read<SyncService>();
+
+        // 1. Set the user context and migrate data if needed
+        expenseProvider.setUserId(targetId, migrateGuest: migrate).then((_) {
+          if (!mounted) return;
+          if (user != null) {
+            // 2. Attempt sync, but ALWAYS re-initialize UI data even if sync fails
+            syncService.sync().whenComplete(() {
+              if (mounted) {
+                expenseProvider.initialize(showLoader: false);
+              }
+            });
+          }
+        });
       });
+    } else if (targetId == 'unauthenticated') {
+      _lastBoundUserId = null;
     }
 
     if (user != null || isGuest) {

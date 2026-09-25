@@ -19,6 +19,8 @@ class AuthProvider extends ChangeNotifier {
   bool get isGuestAuthorized => _isGuestAuthorized;
   bool get isInitialized => _isInitialized;
 
+  String? get username => _user?.userMetadata?['username'] as String?;
+
   Future<void> initialize() async {
     _user = Supabase.instance.client.auth.currentUser;
 
@@ -48,6 +50,18 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  String _cleanErrorMessage(String message) {
+    final lower = message.toLowerCase();
+    if (lower.contains('socketexception') ||
+        lower.contains('failed host lookup') ||
+        lower.contains('clientexception') ||
+        lower.contains('network') ||
+        lower.contains('connection')) {
+      return 'No internet connection. Please check your network and try again.';
+    }
+    return message;
+  }
+
   Future<void> signIn(String email, String password) async {
     _isLoading = true;
     _error = null;
@@ -56,26 +70,32 @@ class AuthProvider extends ChangeNotifier {
       await _authService.signInWithEmailAndPassword(email, password);
       _isGuestAuthorized = false;
       await _storage.write(key: 'is_guest_mode', value: 'false');
+    } on AuthException catch (e) {
+      _error = _cleanErrorMessage(e.message);
     } catch (e) {
-      _error = e.toString().contains('Invalid login credentials')
-          ? 'Invalid email or password.'
-          : 'Sign in failed. Please check your connection.';
+      _error = _cleanErrorMessage(e.toString());
+      if (_error == e.toString()) {
+        _error = 'Sign in failed. Please check your connection.';
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> signUp(String email, String password) async {
+  Future<void> signUp(String email, String password, String username) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
     try {
-      await _authService.signUpWithEmailAndPassword(email, password);
-      _isGuestAuthorized = false;
-      await _storage.write(key: 'is_guest_mode', value: 'false');
+      await _authService.signUpWithEmailAndPassword(email, password, username);
+    } on AuthException catch (e) {
+      _error = _cleanErrorMessage(e.message);
     } catch (e) {
-      _error = 'Sign up failed. Please try again.';
+      _error = _cleanErrorMessage(e.toString());
+      if (_error == e.toString()) {
+        _error = 'Sign up failed. Please try again.';
+      }
     } finally {
       _isLoading = false;
       notifyListeners();

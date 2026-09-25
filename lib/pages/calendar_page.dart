@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:watch_my_wallet/core/utils/category_icons_data.dart';
 import 'package:watch_my_wallet/data/models/local_entities.dart';
 import 'package:watch_my_wallet/providers/expense_provider.dart';
+import 'package:watch_my_wallet/widgets/transaction_action_dialogs.dart';
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({super.key});
@@ -257,57 +258,83 @@ class _CalendarPageState extends State<CalendarPage> {
                 final isIncome = rec.type == LocalTransactionType.income;
                 final categoryName = provider.categoryName(rec.categoryId);
 
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.02),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                return Dismissible(
+                  key: ValueKey(rec.id),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 24),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade700,
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: const Icon(
+                      Icons.delete_outline,
+                      color: Colors.white,
+                      size: 26,
+                    ),
                   ),
-                  child: Material(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
-                    clipBehavior: Clip.antiAlias,
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.all(12),
-                      onLongPress: () => _confirmDelete(context, rec),
-                      leading: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: categoryIcon
-                              .getCategoryColor(categoryName)
-                              .withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(16),
+                  onDismissed: (_) =>
+                      TransactionActions.deleteWithUndo(context, rec),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
                         ),
-                        child: Icon(
-                          categoryIcon.getCategoryIcon(categoryName),
-                          color: categoryIcon.getCategoryColor(categoryName),
-                          size: 24,
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                      clipBehavior: Clip.antiAlias,
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(12),
+                        onTap: () =>
+                            TransactionDetailsDialog.show(context, rec),
+                        onLongPress: () =>
+                            TransactionActions.confirmDelete(context, rec),
+                        leading: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: categoryIcon
+                                .getCategoryColor(categoryName)
+                                .withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Icon(
+                            categoryIcon.getCategoryIcon(categoryName),
+                            color: categoryIcon.getCategoryColor(categoryName),
+                            size: 24,
+                          ),
                         ),
-                      ),
-                      title: Text(
-                        rec.note,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                        title: Text(
+                          rec.note,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
-                      ),
-                      subtitle: Text(
-                        categoryName,
-                        style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                      ),
-                      trailing: Text(
-                        "${isIncome ? '+' : '-'} ₹${NumberFormat("#,##,###.##").format(rec.amount)}",
-                        style: TextStyle(
-                          color: isIncome ? Colors.green[700] : Colors.red[700],
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16,
+                        subtitle: Text(
+                          categoryName,
+                          style:
+                              TextStyle(color: Colors.grey[600], fontSize: 13),
+                        ),
+                        trailing: Text(
+                          "${isIncome ? '+' : '-'} ₹${NumberFormat("#,##,###.##").format(rec.amount)}",
+                          style: TextStyle(
+                            color: isIncome
+                                ? Colors.green[700]
+                                : Colors.red[700],
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
                         ),
                       ),
                     ),
@@ -435,46 +462,6 @@ class _CalendarPageState extends State<CalendarPage> {
       crossAxisCount: 7,
       children: dayWidgets,
     );
-  }
-
-  Future<void> _confirmDelete(
-    BuildContext context,
-    LocalTransaction transaction,
-  ) async {
-    final shouldDelete = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete transaction?'),
-        content: const Text(
-          'This transaction will be removed from your lists.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (shouldDelete != true || !context.mounted) return;
-    try {
-      await context.read<ExpenseProvider>().deleteTransaction(transaction);
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Transaction deleted')));
-      }
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not delete transaction')),
-        );
-      }
-    }
   }
 
   Widget _buildErrorWidget(String error) {

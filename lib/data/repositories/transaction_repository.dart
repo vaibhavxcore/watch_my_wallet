@@ -24,8 +24,8 @@ class TransactionRepository {
       for (final table in tables) {
         await database.update(
           table,
-          {'user_id': newUserId, 'sync_status': SyncStatus.pendingUpdate.name},
-          where: 'user_id = ? OR user_id IS NULL',
+          {'user_id': newUserId, 'sync_status': SyncStatus.pendingCreate.name},
+          where: 'user_id = ?',
           whereArgs: ['guest'],
         );
       }
@@ -39,15 +39,29 @@ class TransactionRepository {
       whereArgs: [userId],
       orderBy: 'name ASC',
     );
-    return rows.map(LocalAccount.fromMap).toList();
+    final accounts = rows.map(LocalAccount.fromMap).toList();
+    final seen = <String>{};
+    final unique = <LocalAccount>[];
+    accounts.sort((a, b) {
+      if (a.userId != null && b.userId == null) return -1;
+      if (a.userId == null && b.userId != null) return 1;
+      return a.name.compareTo(b.name);
+    });
+    for (final acc in accounts) {
+      if (seen.add(acc.name.toLowerCase())) {
+        unique.add(acc);
+      }
+    }
+    return unique;
   }
 
   Future<void> seedDefaultAccounts(String userId) async {
     final now = DateTime.now().toUtc().toIso8601String();
+    final ts = DateTime.now().millisecondsSinceEpoch;
     final defaults = [
-      ['account_cash_$userId', 'Cash'],
-      ['account_bank_$userId', 'Bank Account'],
-      ['account_savings_$userId', 'Saving'],
+      ['account_cash_${userId}_$ts', 'Cash'],
+      ['account_bank_${userId}_$ts', 'Bank Account'],
+      ['account_savings_${userId}_$ts', 'Saving'],
     ];
 
     await _localDatabase.database.transaction((txn) async {
@@ -59,13 +73,14 @@ class TransactionRepository {
           'created_at': now,
           'updated_at': now,
           'sync_status': SyncStatus.synced.name,
-        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
     });
   }
 
   Future<void> seedDefaultCategories(String userId) async {
     final now = DateTime.now().toUtc().toIso8601String();
+    final ts = DateTime.now().millisecondsSinceEpoch;
     const expenseCategories = [
       'Food',
       'Grocery',
@@ -92,35 +107,38 @@ class TransactionRepository {
     await _localDatabase.database.transaction((txn) async {
       for (final category in expenseCategories) {
         await txn.insert('categories', {
-          'id': 'category_expense_${category.toLowerCase()}_$userId',
+          'id': 'category_expense_${category.toLowerCase()}_${userId}_$ts',
           'user_id': userId,
           'name': category,
           'type': 'expense',
           'is_default': 1,
           'created_at': now,
           'updated_at': now,
-        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          'sync_status': SyncStatus.synced.name,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
       for (final category in incomeCategories) {
         await txn.insert('categories', {
-          'id': 'category_income_${category.toLowerCase()}_$userId',
+          'id': 'category_income_${category.toLowerCase()}_${userId}_$ts',
           'user_id': userId,
           'name': category,
           'type': 'income',
           'is_default': 1,
           'created_at': now,
           'updated_at': now,
-        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          'sync_status': SyncStatus.synced.name,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
       await txn.insert('categories', {
-        'id': 'category_transfer_default_$userId',
+        'id': 'category_transfer_default_${userId}_$ts',
         'user_id': userId,
         'name': 'Transfer',
         'type': 'transfer',
         'is_default': 1,
         'created_at': now,
         'updated_at': now,
-      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        'sync_status': SyncStatus.synced.name,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
     });
   }
 
@@ -132,20 +150,14 @@ class TransactionRepository {
     final now = DateTime.now().toUtc();
     final account = LocalAccount(
       id: 'account_custom_${now.microsecondsSinceEpoch}',
+      userId: userId,
       name: name.trim(),
       openingBalance: openingBalance,
       createdAt: now,
       updatedAt: now,
+      syncStatus: SyncStatus.pendingCreate,
     );
-    await _localDatabase.database.insert('accounts', {
-      'id': account.id,
-      'user_id': userId,
-      'name': account.name,
-      'opening_balance': account.openingBalance,
-      'created_at': now.toIso8601String(),
-      'updated_at': now.toIso8601String(),
-      'sync_status': SyncStatus.pendingCreate.name,
-    });
+    await _localDatabase.database.insert('accounts', account.toMap());
     return account;
   }
 
@@ -157,22 +169,19 @@ class TransactionRepository {
     final now = DateTime.now().toUtc();
     final updated = LocalAccount(
       id: account.id,
+      userId: account.userId,
       name: name.trim(),
       openingBalance: openingBalance,
       createdAt: account.createdAt,
       updatedAt: now,
       deletedAt: account.deletedAt,
+      syncStatus: SyncStatus.pendingUpdate,
     );
     await _localDatabase.database.update(
       'accounts',
-      {
-        'name': updated.name,
-        'opening_balance': updated.openingBalance,
-        'updated_at': now.toIso8601String(),
-        'sync_status': SyncStatus.pendingUpdate.name,
-      },
-      where: 'id = ? AND deleted_at IS NULL',
-      whereArgs: [account.id],
+      updated.toMap(),
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [account.id, account.userId],
     );
     return updated;
   }
@@ -202,7 +211,20 @@ class TransactionRepository {
       whereArgs: [type.name, userId],
       orderBy: 'name ASC',
     );
-    return rows.map(LocalCategory.fromMap).toList();
+    final categories = rows.map(LocalCategory.fromMap).toList();
+    final seen = <String>{};
+    final unique = <LocalCategory>[];
+    categories.sort((a, b) {
+      if (a.userId != null && b.userId == null) return -1;
+      if (a.userId == null && b.userId != null) return 1;
+      return a.name.compareTo(b.name);
+    });
+    for (final cat in categories) {
+      if (seen.add(cat.name.toLowerCase())) {
+        unique.add(cat);
+      }
+    }
+    return unique;
   }
 
   Future<LocalCategory> createCategory({
@@ -213,21 +235,15 @@ class TransactionRepository {
     final now = DateTime.now().toUtc();
     final category = LocalCategory(
       id: 'category_custom_${now.microsecondsSinceEpoch}',
+      userId: userId,
       name: name.trim(),
       type: type,
       isDefault: false,
       createdAt: now,
       updatedAt: now,
+      syncStatus: SyncStatus.pendingCreate,
     );
-    await _localDatabase.database.insert('categories', {
-      'id': category.id,
-      'user_id': userId,
-      'name': category.name,
-      'type': category.type.name,
-      'is_default': 0,
-      'created_at': now.toIso8601String(),
-      'updated_at': now.toIso8601String(),
-    });
+    await _localDatabase.database.insert('categories', category.toMap());
     return category;
   }
 
@@ -264,9 +280,7 @@ class TransactionRepository {
       'month': month,
       'created_at': existing == null
           ? now.toIso8601String()
-          : existing.id.isNotEmpty
-          ? now.toIso8601String()
-          : now.toIso8601String(), // simplified
+          : now.toIso8601String(),
       'updated_at': now.toIso8601String(),
       'sync_status': SyncStatus.pendingUpdate.name,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
@@ -292,22 +306,34 @@ class TransactionRepository {
     final now = DateTime.now().toUtc();
     final month = _monthKey();
     final id = 'category_budget_${userId}_${categoryId}_$month';
-    await _localDatabase.database.insert('category_budgets', {
-      'id': id,
-      'user_id': userId,
-      'category_id': categoryId,
-      'amount': amount,
-      'month': month,
-      'created_at': now.toIso8601String(),
-      'updated_at': now.toIso8601String(),
-      'sync_status': SyncStatus.pendingUpdate.name,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-    return LocalCategoryBudget(
+
+    final existingRows = await _localDatabase.database.query(
+      'category_budgets',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    final createdAt = existingRows.isNotEmpty
+        ? DateTime.parse(existingRows.first['created_at'] as String)
+        : now;
+
+    final catBudget = LocalCategoryBudget(
       id: id,
+      userId: userId,
       categoryId: categoryId,
       amount: amount,
       month: month,
+      createdAt: createdAt,
+      updatedAt: now,
+      syncStatus: SyncStatus.pendingUpdate,
     );
+
+    await _localDatabase.database.insert(
+      'category_budgets',
+      catBudget.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    return catBudget;
   }
 
   Future<Map<String, double>> getAccountBalances({
@@ -353,45 +379,48 @@ class TransactionRepository {
   }) async {
     final now = DateTime.now().toUtc();
     final id = 'goal_${now.microsecondsSinceEpoch}';
-    await _localDatabase.database.insert('savings_goals', {
-      'id': id,
-      'user_id': userId,
-      'name': name.trim(),
-      'target_amount': targetAmount,
-      'current_amount': currentAmount,
-      'target_date': targetDate?.toUtc().toIso8601String(),
-      'created_at': now.toIso8601String(),
-      'updated_at': now.toIso8601String(),
-    });
-    return LocalSavingsGoal(
+
+    final goal = LocalSavingsGoal(
       id: id,
+      userId: userId,
       name: name.trim(),
       targetAmount: targetAmount,
       currentAmount: currentAmount,
       targetDate: targetDate,
+      createdAt: now,
+      updatedAt: now,
+      syncStatus: SyncStatus.pendingCreate,
     );
+
+    await _localDatabase.database.insert('savings_goals', goal.toMap());
+    return goal;
   }
 
   Future<LocalSavingsGoal> updateSavingsGoalAmount({
     required LocalSavingsGoal goal,
     required double currentAmount,
   }) async {
-    await _localDatabase.database.update(
-      'savings_goals',
-      {
-        'current_amount': currentAmount,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      },
-      where: 'id = ? AND deleted_at IS NULL',
-      whereArgs: [goal.id],
-    );
-    return LocalSavingsGoal(
+    final now = DateTime.now().toUtc();
+    final updated = LocalSavingsGoal(
       id: goal.id,
+      userId: goal.userId,
       name: goal.name,
       targetAmount: goal.targetAmount,
       currentAmount: currentAmount,
       targetDate: goal.targetDate,
+      createdAt: goal.createdAt,
+      updatedAt: now,
+      deletedAt: goal.deletedAt,
+      syncStatus: SyncStatus.pendingUpdate,
     );
+
+    await _localDatabase.database.update(
+      'savings_goals',
+      updated.toMap(),
+      where: 'id = ? AND deleted_at IS NULL',
+      whereArgs: [goal.id],
+    );
+    return updated;
   }
 
   Future<String?> getSetting(String key) async {
@@ -444,7 +473,10 @@ class TransactionRepository {
       }
       await _localDatabase.database.update(
         'recurring_transactions',
-        {'next_occurrence': nextDate.toIso8601String()},
+        {
+          'next_occurrence': nextDate.toIso8601String(),
+          'updated_at': now.toIso8601String(),
+        },
         where: 'id = ?',
         whereArgs: [recurring.id],
       );
@@ -525,15 +557,19 @@ class TransactionRepository {
         final nextOccurrence = frequency == 'weekly'
             ? date.toUtc().add(const Duration(days: 7))
             : DateTime.utc(date.year, date.month + 1, date.day);
-        await database.insert('recurring_transactions', {
-          'id': 'recurring_${transaction.id}',
-          'user_id': userId,
-          'transaction_id': transaction.id,
-          'frequency': frequency,
-          'next_occurrence': nextOccurrence.toIso8601String(),
-          'created_at': now.toIso8601String(),
-          'updated_at': now.toIso8601String(),
-        });
+
+        final recurring = LocalRecurringTransaction(
+          id: 'recurring_${transaction.id}',
+          userId: userId,
+          transactionId: transaction.id,
+          frequency: frequency,
+          nextOccurrence: nextOccurrence,
+          createdAt: now,
+          updatedAt: now,
+          syncStatus: SyncStatus.pendingCreate,
+        );
+
+        await database.insert('recurring_transactions', recurring.toMap());
       }
     });
     return transaction;
