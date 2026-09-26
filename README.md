@@ -20,6 +20,7 @@
 - 🎯 **Proactive Spending Alerts**: Set category limits and overall monthly budgets with automated threshold warnings before you overspend.
 - 🔄 **Cloud-Sync Ready**: Local mutation queue (`sync_operations`) captures all changes offline, prepared for seamless remote sync via Supabase.
 
+[![Watch the demo](https://img.shields.io/badge/Watch-Demo_Video-blue?style=for-the-badge&logo=youtube)](https://drive.google.com/file/d/1DQhUIQUzngYcBI5-lJsTkzIvc5uX7Tx3/view?usp=sharing)
 ---
 
 ## 📱 App Screenshots
@@ -191,21 +192,4 @@ flutter analyze
 
 ---
 
-## 🗺️ Roadmap
 
-- [x] Local encrypted persistence with SQLCipher
-- [x] Multi-account management and balance resolution
-- [x] Instant Guest mode with user data migration upon login
-- [x] Swipe-to-delete with undo and tap-to-edit dialogs
-- [x] Monthly spending goals and category budgets
-- [x] Calendar-based daily cashflow indicators
-- [ ] Background synchronization worker for Supabase cloud tables
-- [ ] Biometric lock (Fingerprint / Face ID)
-- [ ] CSV & PDF expense report export
-- [ ] Receipt image attachment storage
-
----
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
