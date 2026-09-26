@@ -1,268 +1,211 @@
-# Watch My Wallet
+# 👛 Watch My Wallet
 
-A privacy-first, offline-ready personal finance dashboard built with Flutter, Supabase, and encrypted local SQLite storage.
+> **A privacy-first, offline-ready personal finance dashboard built with Flutter, Supabase, and encrypted local SQLite storage.**
 
-![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)
-![Dart](https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white)
-![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
+[![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
+[![Supabase](https://img.shields.io/badge/Supabase-Auth_%26_Cloud-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com)
+[![SQLite](https://img.shields.io/badge/SQLite-SQLCipher_256--bit-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.zetetic.net/sqlcipher/)
+[![Platform](https://img.shields.io/badge/Platform-Android_%7C_iOS-blueviolet?style=for-the-badge)](#)
+[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](#)
 
-## Project overview
+---
 
-Watch My Wallet is a modern budgeting and expense tracking app designed for real-world use: it supports guest access, secure local persistence, recurring transactions, monthly budgets, savings goals, and account or category management. The app is built around an offline-first architecture so users can keep tracking expenses even without a stable internet connection, while also preparing the foundation for account-level cloud sync through Supabase.
+### ✨ Key Differentiators
 
-This project currently combines:
+- 🛡️ **Military-Grade Local Encryption**: All sensitive financial records are encrypted on-device via AES-256 `SQLCipher` with hardware-backed key storage.
+- ⚡ **Zero-Latency Offline First**: Log transactions immediately—no network spinners, no timeout errors, and 100% functionality without internet.
+- 👤 **Instant Frictionless Guest Mode**: Start tracking on day one without mandatory sign-ups, with seamless one-tap data migration to a cloud account whenever you're ready.
+- 💳 **Multi-Account & Transfer Engine**: Manage Bank, Cash, and Savings wallets with atomic inter-account transfer calculations and real-time balance resolution.
+- 🎯 **Proactive Spending Alerts**: Set category limits and overall monthly budgets with automated threshold warnings before you overspend.
+- 🔄 **Cloud-Sync Ready**: Local mutation queue (`sync_operations`) captures all changes offline, prepared for seamless remote sync via Supabase.
 
-- Encrypted local persistence with `sqflite_sqlcipher`
-- Secure encryption key generation via `flutter_secure_storage`
-- Supabase-powered authentication for login and signup
-- Provider-based state management and local data aggregation
-- Budget, category, savings, transfer, and recurring transaction workflows
-- Dark mode and guest mode flows for a smoother onboarding experience
+---
 
-## Why this app exists
+## 📱 App Screenshots
 
-Personal finance apps often fail when connectivity drops or when users want a fast, frictionless experience without always depending on the cloud. This project addresses that by prioritizing local-first reliability, while designing the data model and sync bookkeeping to support future cloud synchronization without losing user data.
+| 🏠 Home Dashboard | 📊 Insights & Analytics | 📅 Calendar View |
+| :---: | :---: | :---: |
+| <img src="screenshots/home.png" alt="Home Dashboard" width="240" /> | <img src="screenshots/insights.png" alt="Insights Page" width="240" /> | <img src="screenshots/calendar.png" alt="Calendar Page" width="240" /> |
+| **Active balances, monthly goal, recent logs** | **Category breakdown, spending trends, averages** | **Day-by-day cashflow dots & date filtering** |
 
-## Features
+| 👤 Profile & Accounts | ➕ Add Transaction | 🕒 Transaction History |
+| :---: | :---: | :---: |
+| <img src="screenshots/profile.png" alt="Profile Page" width="240" /> | <img src="screenshots/add_transaction.png" alt="Add Transaction Page" width="240" /> | <img src="screenshots/history.png" alt="Transaction History" width="240" /> |
+| **Wallet limits, savings goals, security** | **Expense, income, or transfer with quick tags** | **Swipe-to-delete, tap-to-edit & search filters** |
 
-- Expense, income, and transfer tracking
-- Multiple wallet accounts with opening balances and balance calculations
-- Custom categories for income, expense, and transfer flows
-- Monthly spending budget and per-category budget tracking
-- Savings goals with target amounts and milestone tracking
-- Recurring transactions with automatic generation logic
-- Transaction history and account-linked financial summaries
-- Dark mode support
-- Guest mode support for quick offline usage
-- Email sign-in / sign-up using Supabase auth
-- SQLite-based local persistence with encrypted database access
-- Built-in sync metadata tables for future cloud synchronization
+---
 
-## Screenshots
+## 💡 What Problem Does This Solve?
 
-The project currently does not include checked-in product screenshots, so this section is intentionally structured as a gallery placeholder for your app images.
+Most modern personal finance apps come with significant trade-offs:
+1. **Mandatory Sign-Up Gates**: You can't track a simple \$4 coffee without entering an email, verifying a code, or linking a bank account.
+2. **Offline Fragility**: If you're on a subway, on a flight, or in an area with poor reception, cloud-first apps lock up or fail to record entries.
+3. **Data Privacy Concerns**: Your detailed spending habits, income sources, and net worth are stored in plaintext on third-party servers.
 
-| Dashboard | Add transaction | History |
-| --- | --- | --- |
-| ![Dashboard placeholder](https://placehold.co/600x1200/111827/ffffff?text=Dashboard) | ![Add transaction placeholder](https://placehold.co/600x1200/1f2937/ffffff?text=Add+Transaction) | ![History placeholder](https://placehold.co/600x1200/374151/ffffff?text=History) |
+**Watch My Wallet** eliminates these frustrations by putting **local-first reliability and user privacy at the center**, pairing the instant responsiveness of a native device database with the optional sync benefits of modern cloud backends.
 
-Suggested screenshots to capture later:
+---
 
-- Home dashboard with monthly budget card
-- Add record flow for income, expense, and transfer
-- Transaction history with filtering and category breakdown
-- Accounts and savings goals management screen
-- Budget warning states and insights view
+## 🚀 Why Watch My Wallet?
 
-## Architecture
+- **True Ownership**: Your financial data lives on your device, encrypted with a 256-bit AES key saved in secure hardware storage (`FlutterSecureStorage`).
+- **Smooth, Modern Gestures**: Swipe left to delete with instant **Undo**, tap to view or edit details, and long-press for safe delete confirmation.
+- **Unified Transfers**: Moving money from Bank to Cash accurately adjusts both balances simultaneously without double-counting as an expense.
+- **Recurring Automation**: Automatically populate subscriptions, bills, and recurring income streams on their scheduled dates.
+- **Dark Mode & Material 3**: Beautiful, ergonomic interface designed for quick one-handed entries on the go.
 
-```mermaid
-flowchart LR
-    UI[Flutter UI Screens] --> Provider[Provider State Layer\nAuthProvider + ExpenseProvider]
-    Provider --> Repo[TransactionRepository]
-    Repo --> Local[(Encrypted Local SQLite\nwatch_my_wallet.db)]
-    Provider --> Auth[Supabase Auth]
-    Local --> Sync[Sync Queue\nsync_operations + sync_metadata]
-    Auth --> Cloud[Supabase Cloud Services]
+---
+
+## 🛠️ How It Works
+
+```
+1. Instant Onboarding ──► Start immediately in Guest Mode (zero login required)
+        │
+        ▼
+2. Multi-Wallet Setup ──► Organize Bank, Cash & Savings balances
+        │
+        ▼
+3. Everyday Tracking  ──► Log expenses, income & transfers in under 3 seconds
+        │
+        ▼
+4. Smart Insights     ──► Monitor monthly budgets, category caps & savings milestones
+        │
+        ▼
+5. Cloud Sync Ready   ──► Sign in with Supabase; local data automatically migrates to your cloud account
 ```
 
-### Key architectural components
+---
 
-- `lib/main.dart` initializes the app and database, then boots the providers.
-- `lib/providers/auth_provider.dart` manages authentication state and guest mode.
-- `lib/providers/expense_provider.dart` aggregates account, category, budget, and transaction state.
-- `lib/data/local/local_database.dart` creates the encrypted SQLite schema and default seed data.
-- `lib/data/repositories/transaction_repository.dart` centralizes insert, update, delete, and budget logic.
-- `lib/data/models/local_entities.dart` defines the entity model for accounts, categories, budgets, and transactions.
-- `lib/pages/*` contains the screens for login, home, account management, and transaction history.
+## 📦 Features at a Glance
 
-## Database design
+### 💰 Cashflow & Transaction Management
+- Categorized recording for **Expense**, **Income**, and **Account Transfers**.
+- Intuitive **Swipe-to-Delete** with floating Undo snackbars.
+- **Tap-to-Edit** transaction amounts, notes, and dates.
+- Visual date tags and optional recurring transaction scheduling.
 
-The app uses a local relational schema with SQLite and SQLCipher encryption. Core entities include:
+### 💳 Wallets & Accounts
+- Track multiple accounts (e.g., *Main Bank*, *Cash Wallet*, *Emergency Savings*).
+- Dynamic balance resolution: Opening Balance + Total Incomes - Total Expenses + Net Transfers.
+- Account archiving and balance verification.
+
+### 🎯 Budgets & Savings Goals
+- Overall monthly spending limits with customizable warning thresholds (50% – 100%).
+- Individual **Category Budgets** to restrict spending in specific areas like Dining or Shopping.
+- Dedicated **Savings Goals** with visual progress bars and milestone funding.
+
+### 🔍 Search, Filter & Calendar
+- Full transaction history with instant keyword search across notes, categories, and accounts.
+- Filter by transaction type, date range, or category.
+- Dynamic **Monthly Calendar** indicating income and expense activity by day.
+
+---
+
+## 🗄️ Database & Schema Overview
+
+Watch My Wallet maintains an optimized relational schema in local encrypted SQLite, mirroring cloud tables designed for Supabase:
 
 | Table | Purpose |
 | --- | --- |
-| `accounts` | Store bank, cash, and savings accounts |
-| `categories` | Expense, income, and transfer categories |
+| `accounts` | Wallet/account tracking (Cash, Bank, Savings) |
+| `categories` | Income/expense/transfer category classification |
 | `transactions` | Core financial entries with amounts, dates, notes, and types |
-| `budgets` | Monthly budget target by user |
-| `category_budgets` | Budget target per category |
-| `recurring_transactions` | Recurring transaction metadata and next occurrence |
-| `savings_goals` | Long-term saving targets |
-| `app_settings` | Theme and user preferences |
-| `sync_operations` | Pending cloud sync operations log |
-| `sync_metadata` | Metadata used to track synchronization state |
+| `budgets` | Monthly spending limits and thresholds |
+| `savings_goals` | Long-term target savings goals and milestone tracking |
+| `sync_operations` | Local sync queue for offline mutation tracking & future cloud sync |
 
-### Important data model concepts
+> 📖 **Looking for deep engineering details?**  
+> Check out the [`docs/architecture.md`](docs/architecture.md) for full documentation on encryption key generation, soft-delete semantics, offline journaling, and conflict resolution rules.
 
-- `LocalTransactionType` supports `income`, `expense`, and `transfer`.
-- `SyncStatus` supports `synced`, `pendingCreate`, `pendingUpdate`, `pendingDelete`, and `failed`.
-- Every important mutation is marked with a timestamp and a sync status to support future synchronization.
-- The transaction schema includes `deleted_at` for soft-delete semantics instead of hard deletes.
+---
 
-## Local database setup
+## 🏗️ Architecture Overview
 
-The local database is created in `lib/data/local/local_database.dart` and opened with SQLCipher encryption.
+The application follows a clean layered architecture separating presentation, business logic, local persistence, and cloud synchronization:
 
-### How encryption works
-
-- `SecurityManager.getDatabaseKey()` generates a secure random 32-byte key.
-- That key is saved in `FlutterSecureStorage` so it survives app restarts.
-- `LocalDatabase.open()` opens the database with `password: key`.
-
-### Default database behavior
-
-On first run:
-
-1. The database is created at the app data directory.
-2. Foreign key enforcement is enabled.
-3. Core tables are created.
-4. Default accounts and default categories are seeded.
-5. An initial sync metadata state is initialized.
-
-The current schema version is `3`, and migration logic rebuilds the schema when updates require it.
-
-## Cloud setup
-
-This project uses Supabase for authentication and cloud-ready data integration.
-
-### Required configuration
-
-Update the Supabase configuration in `lib/main.dart`:
-
-```dart
-await Supabase.initialize(
-  url: 'YOUR_SUPABASE_URL',
-  publishableKey: 'YOUR_SUPABASE_ANON_KEY',
-);
+```mermaid
+flowchart LR
+    UI[Flutter UI\nScreens & Action Dialogs] --> Provider[Provider State Layer\nAuthProvider & ExpenseProvider]
+    Provider --> Repo[TransactionRepository]
+    Repo --> Local[(Encrypted SQLite\nwatch_my_wallet.db)]
+    Provider --> Auth[Supabase Auth]
+    Local --> SyncQueue[Sync Queue\nsync_operations]
+    SyncQueue -.-> Cloud[(Supabase Cloud)]
 ```
 
-### Recommended Supabase setup
+---
 
-- Enable Email Auth in the Supabase dashboard.
-- Configure your project URL and anon key in the app.
-- Add row-level security policies for user-scoped tables.
-- Optionally create `profiles`, `transactions`, or a sync queue table for future multi-device sync.
-
-The app also contains a legacy `records` table reference in `lib/record_database.dart`, which indicates an earlier cloud-backed concept that is not the main current runtime flow.
-
-## Sync strategy
-
-The project is intentionally built with an offline-first sync model:
-
-1. User actions are written locally to the encrypted SQLite database first.
-2. Mutations update `sync_status` to `pendingCreate`, `pendingUpdate`, or `pendingDelete`.
-3. Every operation is written to `sync_operations` with the entity type, payload, operation, and timestamp.
-4. The sync layer can later replay those pending journal entries to Supabase or a server-backed store.
-5. The app remains usable without an active internet connection.
-
-This means the app is not just a networked app—it behaves as a resilient personal finance tool that can sync when connectivity returns.
-
-## Conflict resolution strategy
-
-The current repository contains the foundations for a simple and predictable conflict strategy:
-
-- Use `updated_at` as the canonical timestamp for comparing versions.
-- Favor the most recent write when a record is edited on two devices.
-- Preserve a soft-delete (`deleted_at`) as a higher-priority state when a record is deleted remotely or locally.
-- Keep `sync_status` so failed actions can be retried without losing data.
-
-In practical terms, the intended rule is:
-
-- latest `updated_at` wins
-- if a delete and an update race, the delete wins if it is newer
-- failed syncs remain queued and retried rather than dropped
-
-This is the correct pattern for a finance app because it reduces accidental data loss and keeps auditability intact.
-
-## Installation instructions
+## 🏁 Getting Started
 
 ### Prerequisites
 
-- Flutter SDK (3.12.x or later)
-- Android Studio or VS Code with Flutter extensions
-- Xcode for iOS development if you are testing on Apple hardware
-- A Supabase project with Auth enabled
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) (`3.12.0` or later)
+- Android Studio / VS Code with Flutter & Dart extensions
+- Xcode (for iOS builds on macOS)
+- A free [Supabase](https://supabase.com) project (for authentication & cloud sync)
 
-### Setup steps
+### Installation & Run
 
-1. Clone the repository:
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/your-username/watch_my_wallet.git
+   cd watch_my_wallet
+   ```
 
-```bash
-git clone <your-repo-url>
-cd watch_my_wallet
-```
+2. **Install dependencies**:
+   ```bash
+   flutter pub get
+   ```
 
-2. Install dependencies:
+3. **Configure Supabase**:
+   Open `lib/main.dart` and provide your Supabase project credentials:
+   ```dart
+   await Supabase.initialize(
+     url: 'https://YOUR_SUPABASE_PROJECT.supabase.co',
+     anonKey: 'YOUR_SUPABASE_ANON_KEY',
+   );
+   ```
 
-```bash
-flutter pub get
-```
+4. **Launch the application**:
+   ```bash
+   flutter run
+   ```
 
-3. Configure Supabase in `lib/main.dart` with your project URL and anon key.
+---
 
-4. Run the app:
+## 🧪 Testing & Quality Assurance
 
-```bash
-flutter run
-```
-
-### Optional: initialize Android/iOS builds
-
-```bash
-flutter clean
-flutter pub get
-flutter run
-```
-
-## Testing instructions
-
-This project includes a focused test suite covering budgeting and insight calculations.
-
-### Run all tests
+Run the automated test suite to verify insight metrics and budget calculation logic:
 
 ```bash
+# Run all tests
 flutter test
-```
 
-### Run the current insight-focused suite
-
-```bash
+# Run insight calculation unit tests
 flutter test test/insight_metrics_test.dart
+
+# Run static analysis
+flutter analyze
 ```
 
-### Suggested manual QA checklist
+---
 
-- Create an expense, income, and transfer entry
-- Verify account balances update correctly
-- Confirm the budget warning threshold reacts appropriately
-- Test recurring transaction generation
-- Test guest mode and sign-in flow
-- Verify dark mode toggle persists correctly
+## 🗺️ Roadmap
 
-## Known limitations
+- [x] Local encrypted persistence with SQLCipher
+- [x] Multi-account management and balance resolution
+- [x] Instant Guest mode with user data migration upon login
+- [x] Swipe-to-delete with undo and tap-to-edit dialogs
+- [x] Monthly spending goals and category budgets
+- [x] Calendar-based daily cashflow indicators
+- [ ] Background synchronization worker for Supabase cloud tables
+- [ ] Biometric lock (Fingerprint / Face ID)
+- [ ] CSV & PDF expense report export
+- [ ] Receipt image attachment storage
 
-This project is a strong local-first MVP, but there are still limitations to be aware of:
+---
 
-- Cloud sync is partially designed but not yet fully operational as a background worker.
-- The runtime currently relies on Supabase auth, while the full financial record sync pipeline is still being finalized.
-- The codebase still contains legacy cloud-oriented references (`RecordDatabase`, `records` table) that should be cleaned up or replaced.
-- The database schema and sync logic are local-first but not yet fully hardened for large-scale multi-device production use.
-- Some screens and flows are focused on functionality and UX rather than a fully packaged production design system.
-- There is no current export/import system for data backups.
-- There is no dedicated background service for automatic sync retries beyond the queued transactional model.
+## 📄 License
 
-## Recommended next steps
-
-- Implement a real sync worker that reads `sync_operations` and pushes changes to Supabase.
-- Add a proper cloud schema for transactions, accounts, categories, and budgets.
-- Add unit tests around repository logic, conflict handling, and migration behavior.
-- Add screenshots and a polished onboarding flow.
-- Add analytics, CSV export, and recurring transaction management improvements.
-
-## Summary
-
-Watch My Wallet is a practical personal finance app focused on trust, reliability, and clean local-first behavior. It already delivers a meaningful budgeting experience while setting up the right data and state architecture for a future full cloud synchronization layer.
-
-If you are building this for a portfolio, prototype, or personal product, it is already structured as a solid foundation for a polished money-management app.
+This project is licensed under the [MIT License](LICENSE).
